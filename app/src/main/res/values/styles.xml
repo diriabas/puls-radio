@@ -1,0 +1,10 @@
+
+<resources>
+    <style name="Theme.PulsRadio" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#454A50</item>
+        <item name="colorPrimaryDark">#30343A</item>
+        <item name="colorAccent">#2865B2</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
