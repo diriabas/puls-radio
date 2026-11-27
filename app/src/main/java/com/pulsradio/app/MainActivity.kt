@@ -31,11 +31,7 @@ class MainActivity : Activity() {
         "Коран — Сауд аш-Шурайм",
         "DFM",
         "Like FM",
-        "Русское Радио",
-        "Наше Радио",
-        "Relax FM",
-        "Радио Маяк",
-        "Вести FM"
+        "Русское Радио"
     )
 
     private val stationUrls = mapOf(
@@ -70,19 +66,7 @@ class MainActivity : Activity() {
             "https://hls-01-gpm.hostingradio.ru/likefm495/playlist.m3u8",
 
         "Русское Радио" to
-            "https://rusradio.hostingradio.ru/rusradio96.aacp",
-
-        "Наше Радио" to
-            "http://nashe1.hostingradio.ru/nashe-128.mp3",
-
-        "Relax FM" to
-            "https://hls-01-gpm.hostingradio.ru/relaxfm7/playlist.m3u8",
-
-        "Радио Маяк" to
-            "https://icecast-vgtrk.cdnvideo.ru/mayakfm",
-
-        "Вести FM" to
-            "https://icecast-vgtrk.cdnvideo.ru/vestifm_aac_32kbps"
+            "https://rusradio.hostingradio.ru/rusradio96.aacp"
     )
 
     private var selectedStation = 0
