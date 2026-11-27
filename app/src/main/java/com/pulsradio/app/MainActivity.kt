@@ -2,6 +2,7 @@
 package com.pulsradio.app
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.os.Bundle
 import android.os.Build
 import android.view.Gravity
@@ -79,11 +80,93 @@ class MainActivity : Activity() {
     private var colorAnimator: ValueAnimator? = null
     private var visualizerAnimator: ValueAnimator? = null
 
-    private val backgroundColor = Color.rgb(5, 12, 24)
-    private val panelColor = Color.rgb(17, 34, 52)
-    private val accentColor = Color.rgb(0, 195, 255)
-    private val textColor = Color.rgb(240, 248, 255)
-    private val secondaryColor = Color.rgb(155, 190, 215)
+    // Цвета текущей темы. Выбранная тема сохраняется в настройках приложения.
+    private var selectedTheme = "blue"
+
+    private var backgroundColor = Color.rgb(5, 12, 24)
+    private var panelColor = Color.rgb(17, 34, 52)
+    private var accentColor = Color.rgb(0, 195, 255)
+    private var textColor = Color.rgb(240, 248, 255)
+    private var secondaryColor = Color.rgb(155, 190, 215)
+
+    private fun applyThemeColors() {
+        when (selectedTheme) {
+            "gray" -> {
+                backgroundColor = Color.rgb(43, 47, 53)
+                panelColor = Color.rgb(58, 63, 70)
+                accentColor = Color.rgb(190, 198, 207)
+                textColor = Color.WHITE
+                secondaryColor = Color.rgb(205, 210, 216)
+            }
+
+            "light_gray" -> {
+                backgroundColor = Color.rgb(235, 238, 242)
+                panelColor = Color.rgb(215, 220, 226)
+                accentColor = Color.rgb(65, 105, 145)
+                textColor = Color.rgb(35, 43, 53)
+                secondaryColor = Color.rgb(95, 105, 118)
+            }
+
+            "blue" -> {
+                backgroundColor = Color.rgb(5, 12, 24)
+                panelColor = Color.rgb(17, 34, 52)
+                accentColor = Color.rgb(0, 195, 255)
+                textColor = Color.rgb(240, 248, 255)
+                secondaryColor = Color.rgb(155, 190, 215)
+            }
+
+            "light_blue" -> {
+                backgroundColor = Color.rgb(218, 235, 248)
+                panelColor = Color.rgb(195, 220, 240)
+                accentColor = Color.rgb(30, 115, 180)
+                textColor = Color.rgb(25, 48, 70)
+                secondaryColor = Color.rgb(75, 105, 130)
+            }
+
+            else -> {
+                selectedTheme = "blue"
+                backgroundColor = Color.rgb(5, 12, 24)
+                panelColor = Color.rgb(17, 34, 52)
+                accentColor = Color.rgb(0, 195, 255)
+                textColor = Color.rgb(240, 248, 255)
+                secondaryColor = Color.rgb(155, 190, 215)
+            }
+        }
+    }
+
+    private fun showThemeDialog() {
+        val themeKeys = arrayOf("gray", "light_gray", "blue", "light_blue")
+        val themeNames = arrayOf(
+            "Серая",
+            "Светло-серая",
+            "Синяя",
+            "Светло-синяя"
+        )
+
+        val currentIndex = themeKeys.indexOf(selectedTheme).coerceAtLeast(0)
+
+        AlertDialog.Builder(this)
+            .setTitle("Выбери тему оформления")
+            .setSingleChoiceItems(themeNames, currentIndex) { dialog, which ->
+                selectedTheme = themeKeys[which]
+
+                prefs.edit()
+                    .putString("theme", selectedTheme)
+                    .apply()
+
+                applyThemeColors()
+                window.statusBarColor = backgroundColor
+                window.navigationBarColor = backgroundColor
+
+                // Пересоздаём только интерфейс. Проигрыватель продолжает работать.
+                createMainLayout()
+                showTab(currentTab)
+
+                dialog.dismiss()
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,6 +176,8 @@ class MainActivity : Activity() {
 
         animationEnabled = prefs.getBoolean("animation", true)
         autoStartEnabled = prefs.getBoolean("auto_start", false)
+        selectedTheme = prefs.getString("theme", "blue") ?: "blue"
+        applyThemeColors()
 
         window.statusBarColor = backgroundColor
         window.navigationBarColor = backgroundColor
@@ -755,13 +840,18 @@ class MainActivity : Activity() {
             }
         )
 
-        container.addView(
-            createInfoSetting(
-                "Тема приложения",
-                "Тёмное стекло с голубой подсветкой",
-                "◈"
-            )
-        )
+        val themeSetting = createInfoSetting(
+            "Тема приложения",
+            getThemeDisplayName(),
+            "◈"
+        ).apply {
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                showThemeDialog()
+            }
+        }
+        container.addView(themeSetting)
 
         container.addView(sectionTitle("ВОСПРОИЗВЕДЕНИЕ"))
 
@@ -809,6 +899,16 @@ class MainActivity : Activity() {
         scroll.addView(container)
 
         return scroll
+    }
+
+    private fun getThemeDisplayName(): String {
+        return when (selectedTheme) {
+            "gray" -> "Серая"
+            "light_gray" -> "Светло-серая"
+            "blue" -> "Синяя"
+            "light_blue" -> "Светло-синяя"
+            else -> "Синяя"
+        }
     }
 
     private fun sectionTitle(text: String): TextView {
@@ -1007,27 +1107,41 @@ class MainActivity : Activity() {
     }
 
     private fun stationBackground(active: Boolean): GradientDrawable {
+        val first: Int
+        val second: Int
+        val third: Int
+
+        when (selectedTheme) {
+            "light_gray" -> {
+                first = if (active) Color.rgb(224, 231, 238) else panelColor
+                second = if (active) Color.rgb(210, 221, 232) else Color.rgb(225, 229, 234)
+                third = if (active) Color.rgb(215, 225, 235) else Color.rgb(218, 223, 229)
+            }
+            "light_blue" -> {
+                first = if (active) Color.rgb(185, 216, 240) else panelColor
+                second = if (active) Color.rgb(171, 207, 235) else Color.rgb(207, 226, 242)
+                third = if (active) Color.rgb(195, 222, 242) else Color.rgb(200, 220, 238)
+            }
+            "gray" -> {
+                first = if (active) Color.rgb(76, 84, 94) else panelColor
+                second = if (active) Color.rgb(62, 69, 78) else Color.rgb(49, 54, 61)
+                third = if (active) Color.rgb(70, 77, 86) else Color.rgb(54, 60, 68)
+            }
+            else -> {
+                first = if (active) Color.rgb(13, 61, 88) else Color.rgb(24, 43, 61)
+                second = if (active) Color.rgb(10, 34, 55) else Color.rgb(12, 27, 43)
+                third = if (active) Color.rgb(12, 48, 69) else Color.rgb(19, 37, 54)
+            }
+        }
+
         return GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
-            if (active) {
-                intArrayOf(
-                    Color.rgb(13, 61, 88),
-                    Color.rgb(10, 34, 55),
-                    Color.rgb(12, 48, 69)
-                )
-            } else {
-                intArrayOf(
-                    Color.rgb(24, 43, 61),
-                    Color.rgb(12, 27, 43),
-                    Color.rgb(19, 37, 54)
-                )
-            }
+            intArrayOf(first, second, third)
         ).apply {
             cornerRadius = dp(17).toFloat()
             setStroke(
                 dp(if (active) 2 else 1),
-                if (active) accentColor
-                else Color.rgb(57, 91, 119)
+                if (active) accentColor else secondaryColor
             )
         }
     }
@@ -1036,29 +1150,36 @@ class MainActivity : Activity() {
         first: Int,
         second: Int
     ): GradientDrawable {
+        val endColor = when (selectedTheme) {
+            "light_gray" -> Color.rgb(226, 230, 235)
+            "light_blue" -> Color.rgb(205, 226, 243)
+            "gray" -> Color.rgb(48, 53, 60)
+            else -> Color.rgb(9, 24, 43)
+        }
+
         return GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
-            intArrayOf(
-                first,
-                second,
-                Color.rgb(9, 24, 43)
-            )
+            intArrayOf(first, second, endColor)
         ).apply {
             cornerRadius = dp(25).toFloat()
-            setStroke(dp(1), Color.rgb(66, 133, 171))
+            setStroke(dp(1), accentColor)
         }
     }
 
     private fun roundAccentBackground(): GradientDrawable {
+        val darkerAccent = when (selectedTheme) {
+            "gray" -> Color.rgb(105, 115, 127)
+            "light_gray" -> Color.rgb(48, 83, 120)
+            "light_blue" -> Color.rgb(35, 105, 165)
+            else -> Color.rgb(0, 103, 180)
+        }
+
         return GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
-            intArrayOf(
-                Color.rgb(0, 190, 255),
-                Color.rgb(0, 103, 180)
-            )
+            intArrayOf(accentColor, darkerAccent)
         ).apply {
             shape = GradientDrawable.OVAL
-            setStroke(dp(2), Color.rgb(100, 224, 255))
+            setStroke(dp(2), secondaryColor)
         }
     }
 
@@ -1069,7 +1190,7 @@ class MainActivity : Activity() {
         return GradientDrawable().apply {
             setColor(color)
             cornerRadius = dp(radius).toFloat()
-            setStroke(dp(1), Color.rgb(56, 95, 125))
+            setStroke(dp(1), secondaryColor)
         }
     }
 
