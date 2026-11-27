@@ -2,16 +2,10 @@
 package com.pulsradio.app
 
 import android.app.Activity
-import android.app.Service
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
-import android.os.Binder
 import android.app.AlertDialog
 import android.os.Bundle
 import android.content.res.Configuration
@@ -30,10 +24,8 @@ import android.util.Log
 import java.net.HttpURLConnection
 import java.net.URL
 
-import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -163,6 +155,7 @@ class MainActivity : Activity() {
     private var playbackService: RadioPlaybackService? = null
     private var attachedPlayerListener: Player.Listener? = null
     private var serviceBound = false
+    private var pendingStationIndex: Int? = null
     private val playbackConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val localBinder = binder as? RadioPlaybackService.LocalBinder ?: return
@@ -172,7 +165,13 @@ class MainActivity : Activity() {
             updatePlayerInformation()
             updatePlayButton()
             updateStationCards()
-            if (autoStartEnabled && player?.mediaItemCount == 0) playStation(selectedStation)
+            val pending = pendingStationIndex
+            if (pending != null) {
+                pendingStationIndex = null
+                playStation(pending)
+            } else if (autoStartEnabled && player?.mediaItemCount == 0) {
+                playStation(selectedStation)
+            }
         }
         override fun onServiceDisconnected(name: ComponentName?) {
             playbackService = null
@@ -327,6 +326,11 @@ class MainActivity : Activity() {
 
         createMainLayout()
         showTab(0)
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4103)
+        }
     }
 
     override fun onStart() {
@@ -349,6 +353,7 @@ class MainActivity : Activity() {
         window.navigationBarColor = backgroundColor
         createMainLayout()
         showTab(currentTab)
+        window.decorView.requestApplyInsets()
     }
 
     private fun createMainLayout() {
@@ -362,7 +367,7 @@ class MainActivity : Activity() {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(if (isLandscape()) 1 else 4), dp(12), dp(if (isLandscape()) 2 else 5))
+            setPadding(dp(8), dp(if (isLandscape()) 1 else 3), dp(8), dp(if (isLandscape()) 1 else 3))
         }
 
         val logo = TextView(this).apply {
@@ -372,7 +377,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setTypeface(null, Typeface.BOLD)
         }
-        header.addView(logo, LinearLayout.LayoutParams(iconDp(46), iconDp(48)))
+        header.addView(logo, LinearLayout.LayoutParams(if (isLandscape()) dp(32) else dp(38), if (isLandscape()) dp(34) else dp(40)))
 
         val titleColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -390,22 +395,22 @@ class MainActivity : Activity() {
             background = roundedBackground(accentColor, 5)
         }
         titleColumn.addView(appName)
-        titleColumn.addView(accentLine, LinearLayout.LayoutParams(dp(42), dp(2)).apply {
+        titleColumn.addView(accentLine, LinearLayout.LayoutParams(dp(52), dp(2)).apply {
             topMargin = dp(3)
         })
         header.addView(titleColumn, LinearLayout.LayoutParams(0, dp(48), 1f))
 
         settingsButton = TextView(this).apply {
             text = "⚙"
-            textSize = iconTextSize(23f)
+            textSize = iconTextSize(17f)
             setTextColor(accentColor)
             gravity = Gravity.CENTER
-            background = roundedBackground(panelColor, 16)
+            background = roundedBackground(panelColor, 12)
             isClickable = true
             isFocusable = true
             setOnClickListener { showTab(if (currentTab == 0) 1 else 0) }
         }
-        header.addView(settingsButton, LinearLayout.LayoutParams(iconDp(46), iconDp(46)))
+        header.addView(settingsButton, LinearLayout.LayoutParams(iconDp(34), iconDp(34)))
         root.addView(header)
 
         contentFrame = FrameLayout(this)
@@ -431,11 +436,13 @@ class MainActivity : Activity() {
             val rightInset: Int
             val bottomInset: Int
             if (Build.VERSION.SDK_INT >= 30) {
-                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                leftInset = bars.left
-                topInset = bars.top
-                rightInset = bars.right
-                bottomInset = bars.bottom
+                val safe = insets.getInsets(
+                    WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout()
+                )
+                leftInset = safe.left
+                topInset = safe.top
+                rightInset = safe.right
+                bottomInset = safe.bottom
             } else {
                 @Suppress("DEPRECATION")
                 run {
@@ -445,7 +452,7 @@ class MainActivity : Activity() {
                     bottomInset = insets.systemWindowInsetBottom
                 }
             }
-            // Учитываем боковую навигационную панель Huawei в альбомном режиме.
+            // Системная панель навигации Huawei в альбомной ориентации находится справа.
             view.setPadding(leftInset, topInset, rightInset, bottomInset)
             insets
         }
@@ -479,18 +486,13 @@ class MainActivity : Activity() {
         }
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(13), dp(5), dp(13), dp(12))
+            setPadding(dp(if (isLandscape()) 7 else 13), dp(5), dp(if (isLandscape()) 7 else 13), dp(12))
         }
 
-        // На телефоне в альбомной ориентации используем 6 колонок,
-        // на широких экранах — 7. Количество строк рассчитывается по каталогу.
-        val widthDp = resources.configuration.screenWidthDp
-        val columns = when {
-            !isLandscape() -> 3
-            widthDp >= 900 -> 7
-            else -> 6
-        }
-        val tileHeight = if (isLandscape()) dp(112) else dp(126)
+        val columns = if (isLandscape()) 7 else 3
+        val availableWidthDp = resources.displayMetrics.widthPixels / resources.displayMetrics.density
+        val horizontalPaddingDp = if (isLandscape()) 60f else 26f
+        val tileHeight = dp(((availableWidthDp - horizontalPaddingDp) / columns).toInt().coerceAtLeast(76))
         var index = 0
         while (index < stations.size) {
             val row = LinearLayout(this).apply {
@@ -501,8 +503,8 @@ class MainActivity : Activity() {
                 val stationIndex = index + column
                 val stationTileHeight = tileHeight
                 val params = LinearLayout.LayoutParams(0, stationTileHeight, 1f).apply {
-                    if (column > 0) marginStart = dp(if (isLandscape()) 2 else 4)
-                    if (column < columns - 1) marginEnd = dp(if (isLandscape()) 2 else 4)
+                    if (column > 0) marginStart = dp(if (isLandscape()) 3 else 4)
+                    if (column < columns - 1) marginEnd = dp(if (isLandscape()) 3 else 4)
                 }
                 if (stationIndex < stations.size) {
                     val tile = createStationTile(stationIndex, stations[stationIndex])
@@ -514,7 +516,7 @@ class MainActivity : Activity() {
             }
             container.addView(row, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, tileHeight
-            ).apply { bottomMargin = dp(if (isLandscape()) 4 else 8) })
+            ).apply { bottomMargin = dp(if (isLandscape()) 5 else 8) })
             index += columns
         }
         scroll.addView(container)
@@ -774,7 +776,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             background = stationBackground(index == selectedStation)
-            setPadding(dp(4), dp(7), dp(4), dp(5))
+            setPadding(dp(3), dp(4), dp(3), dp(3))
             isClickable = true
             isFocusable = true
             setOnClickListener {
@@ -787,20 +789,25 @@ class MainActivity : Activity() {
             textSize = iconTextSize(logoTextSize(station))
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
+            includeFontPadding = false
             background = roundedBackground(getStationLogoColor(station), 15)
         }
 
+        val tileSideDp = (resources.displayMetrics.widthPixels / resources.displayMetrics.density /
+            (if (isLandscape()) 7f else 3f)).toInt() - if (isLandscape()) 7 else 0
+        val logoSide = dp((tileSideDp * 0.39f).toInt().coerceIn(32, 66))
+        icon.textSize = (logoTextSize(station) * (logoSide.toFloat() / dp(44))).coerceIn(10f, 27f)
         tile.addView(
             icon,
-            LinearLayout.LayoutParams(iconDp(42), iconDp(40)).apply {
+            LinearLayout.LayoutParams(logoSide, logoSide).apply {
                 gravity = Gravity.CENTER
-                bottomMargin = dp(5)
+                bottomMargin = dp(3)
             }
         )
 
         val name = TextView(this).apply {
             text = station
-            textSize = if (isLandscape()) 8.5f else 10.5f
+            textSize = if (isLandscape()) 9f else 10f
             setTextColor(textColor)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
@@ -810,13 +817,13 @@ class MainActivity : Activity() {
             name,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (if (isLandscape()) dp(30) else dp(34))
+                dp((tileSideDp * 0.22f).toInt().coerceAtLeast(22))
             )
         )
 
         val description = TextView(this).apply {
             text = getStationDescription(station)
-            textSize = if (isLandscape()) 7.5f else 7.5f
+            textSize = if (isLandscape()) 7f else 7.5f
             setTextColor(secondaryColor)
             gravity = Gravity.CENTER
             maxLines = 1
@@ -825,13 +832,13 @@ class MainActivity : Activity() {
             description,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (if (isLandscape()) dp(17) else dp(15))
+                dp((tileSideDp * 0.12f).toInt().coerceAtLeast(12))
             )
         )
 
         val indicator = TextView(this).apply {
             text = if (index == selectedStation && player?.isPlaying == true) "♫" else "›"
-            textSize = iconTextSize(15f)
+            textSize = iconTextSize(if (isLandscape()) 11f else 15f)
             setTextColor(if (index == selectedStation) accentColor else secondaryColor)
             gravity = Gravity.CENTER
         }
@@ -839,7 +846,7 @@ class MainActivity : Activity() {
             indicator,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(13)
+                dp((tileSideDp * 0.10f).toInt().coerceAtLeast(11))
             )
         )
 
@@ -943,6 +950,7 @@ class MainActivity : Activity() {
         if (index !in stations.indices) return
         val currentPlayer = player
         if (currentPlayer == null) {
+            pendingStationIndex = index
             showStatus("Подключение проигрывателя…")
             return
         }
@@ -972,8 +980,9 @@ class MainActivity : Activity() {
         showStatus("Подключение: $station")
         // Запускаем уже привязанный сервис в foreground; сам поток задаётся
         // через общий ExoPlayer, полученный из LocalBinder.
-        ContextCompat.startForegroundService(this, Intent(this, RadioPlaybackService::class.java))
+        startService(Intent(this, RadioPlaybackService::class.java))
 
+        playbackService?.updatePlaybackNotification(station, true)
         val firstCandidate = activeStreamCandidates.firstOrNull() ?: url
         if (firstCandidate.endsWith(".m3u", ignoreCase = true) &&
             !firstCandidate.endsWith(".m3u8", ignoreCase = true)
@@ -1031,7 +1040,12 @@ class MainActivity : Activity() {
         try {
             currentStreamUrl = url
             currentPlayer.stop()
-            currentPlayer.setMediaItem(MediaItem.fromUri(url))
+            currentPlayer.setMediaItem(
+                MediaItem.Builder()
+                    .setUri(url)
+                    .setMediaMetadata(MediaMetadata.Builder().setTitle(station).build())
+                    .build()
+            )
             currentPlayer.prepare()
             currentPlayer.play()
             showStatus("Запуск: $station")
@@ -1052,7 +1066,12 @@ class MainActivity : Activity() {
                     val url = currentStreamUrl
                         ?: stationUrls[stations[selectedStation]]
                         ?: return
-                    currentPlayer.setMediaItem(MediaItem.fromUri(url))
+                    currentPlayer.setMediaItem(
+                        MediaItem.Builder()
+                            .setUri(url)
+                            .setMediaMetadata(MediaMetadata.Builder().setTitle(stations[selectedStation]).build())
+                            .build()
+                    )
                     currentPlayer.prepare()
                 }
 
@@ -1127,8 +1146,9 @@ class MainActivity : Activity() {
             Triple("Станция", stations[selectedStation], "last"),
             Triple("Версия приложения", getInstalledVersion(), "about")
         )
-        val columns = 3
-        val settingsTileHeight = if (isLandscape()) dp(92) else dp(126)
+        val columns = if (isLandscape()) 5 else 3
+        val availableWidthDp = resources.displayMetrics.widthPixels / resources.displayMetrics.density
+        val settingsTileHeight = dp(((availableWidthDp - (if (isLandscape()) 60f else 30f)) / columns).toInt().coerceAtLeast(76))
         var index = 0
         while (index < gridItems.size) {
             val row = LinearLayout(this).apply {
@@ -1138,8 +1158,8 @@ class MainActivity : Activity() {
             for (column in 0 until columns) {
                 val itemIndex = index + column
                 val params = LinearLayout.LayoutParams(0, settingsTileHeight, 1f).apply {
-                    if (column > 0) marginStart = dp(if (isLandscape()) 2 else 4)
-                    if (column < columns - 1) marginEnd = dp(if (isLandscape()) 2 else 4)
+                    if (column > 0) marginStart = dp(if (isLandscape()) 3 else 4)
+                    if (column < columns - 1) marginEnd = dp(if (isLandscape()) 3 else 4)
                 }
                 if (itemIndex < gridItems.size) {
                     val item = gridItems[itemIndex]
@@ -1174,27 +1194,27 @@ class MainActivity : Activity() {
                 "last" -> "◉"
                 else -> "ⓘ"
             }
-            textSize = iconTextSize(23f)
+            textSize = iconTextSize(19f)
             setTextColor(accentColor)
             gravity = Gravity.CENTER
         }
         tile.addView(symbol, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, iconDp(28)
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(30)
         ))
         val titleView = TextView(this).apply {
             text = title
-            textSize = if (isLandscape()) 12f else 11f
+            textSize = if (isLandscape()) 10f else 11f
             setTextColor(textColor)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
             maxLines = 2
         }
         tile.addView(titleView, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(29)
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(27)
         ))
         val detailView = TextView(this).apply {
             text = subtitle
-            textSize = if (isLandscape()) 9f else 8f
+            textSize = if (isLandscape()) 8f else 8f
             setTextColor(secondaryColor)
             gravity = Gravity.CENTER
             maxLines = 2
@@ -1621,4 +1641,3 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 }
-
