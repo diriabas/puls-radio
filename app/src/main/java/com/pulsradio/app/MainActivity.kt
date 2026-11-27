@@ -6,10 +6,7 @@ import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.content.Intent
-import android.net.Uri
 import android.view.Gravity
-import android.view.View
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -26,11 +23,12 @@ class MainActivity : Activity() {
     private val stations = listOf(
         "Европа Плюс",
         "Радио Вера",
-        "Мирадио",
-        "Радио Азан",
-        "Исламское Радио",
-        "Muslim",
-        "Радио Корана",
+        "Коран — Абдул Басит",
+        "Коран — Мишари Аль-Афаси",
+        "Коран — Махер Аль-Муэкли",
+        "Коран — перевод на русский",
+        "Коран — Мухаммад аль-Миншави",
+        "Коран — Сауд аш-Шурайм",
         "Радио Рекорд",
         "DFM",
         "Радио ENERGY",
@@ -63,15 +61,25 @@ class MainActivity : Activity() {
             "https://hls-01-regions.emgsound.ru/11_msk/96/playlist.m3u8",
 
         "Радио Вера" to
-            "https://radiovera.hostingradio.ru:8007/radiovera_128"
-    )
+            "https://radiovera.hostingradio.ru:8007/radiovera_128",
 
-    private val websiteUrls = mapOf(
-        "Мирадио" to "https://miradio.ru",
-        "Радио Азан" to "https://azan.fm",
-        "Исламское Радио" to "https://101.ru/radio/user/756167",
-        "Muslim" to "https://101.ru/radio/user/876627",
-        "Радио Корана" to "https://quranradio.cc/ru/"
+        "Коран — Абдул Басит" to
+            "https://backup.qurango.net/radio/abdulbasit_abdulsamad",
+
+        "Коран — Мишари Аль-Афаси" to
+            "https://backup.qurango.net/radio/mishary_alafasi",
+
+        "Коран — Махер Аль-Муэкли" to
+            "https://backup.qurango.net/radio/maher",
+
+        "Коран — перевод на русский" to
+            "https://backup.qurango.net/radio/translation_quran_Russia",
+
+        "Коран — Мухаммад аль-Миншави" to
+            "https://radio.mp3islam.com/listen/minshawi/radio.mp3",
+
+        "Коран — Сауд аш-Шурайм" to
+            "https://radio.mp3islam.com/listen/alshuraim/radio.mp3"
     )
 
     private var selectedStation = 0
@@ -82,7 +90,6 @@ class MainActivity : Activity() {
     private lateinit var stationList: LinearLayout
     private lateinit var statusText: TextView
     private lateinit var scrollView: ScrollView
-    private lateinit var websiteButton: TextView
 
     private val backgroundColor = Color.rgb(30, 34, 42)
     private val panelColor = Color.rgb(43, 49, 60)
@@ -232,24 +239,6 @@ class MainActivity : Activity() {
 
         root.addView(statusText)
 
-        websiteButton = createControl("СЛУШАТЬ НА САЙТЕ").apply {
-            textSize = 14f
-            visibility = View.GONE
-            setOnClickListener {
-                openSelectedWebsite()
-            }
-        }
-
-        root.addView(
-            websiteButton,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(48)
-            ).apply {
-                bottomMargin = dp(8)
-            }
-        )
-
         val listTitle = TextView(this).apply {
             text = "РАДИОСТАНЦИИ"
             textSize = 16f
@@ -309,21 +298,14 @@ class MainActivity : Activity() {
 
         updatePlayerTitle()
         updateStationList()
-        updateWebsiteButton()
     }
 
     private fun togglePlayback() {
         val station = stations[selectedStation]
-
-        if (websiteUrls.containsKey(station)) {
-            showStatus("Нажмите кнопку «Слушать на сайте»")
-            return
-        }
-
         val currentUrl = stationUrls[station]
 
         if (currentUrl == null) {
-            showStatus("Эта станция пока не подключена")
+            showStatus("Прямой поток пока не подключён")
             return
         }
 
@@ -358,32 +340,6 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun openSelectedWebsite() {
-        val station = stations[selectedStation]
-        val url = websiteUrls[station] ?: return
-
-        try {
-            val intent = Intent(
-                Intent.ACTION_VIEW,
-                Uri.parse(url)
-            )
-
-            startActivity(intent)
-            showStatus("Открываем: $station")
-
-        } catch (error: Throwable) {
-            showStatus("Не удалось открыть сайт")
-
-            Toast.makeText(
-                this,
-                "Не удалось открыть браузер",
-                Toast.LENGTH_LONG
-            ).show()
-
-            Log.e("PulsRadio", "Ошибка открытия сайта", error)
-        }
-    }
-
     private fun selectStation(index: Int) {
         selectedStation = index
 
@@ -397,7 +353,6 @@ class MainActivity : Activity() {
         updatePlayerTitle()
         updateStationList()
         updatePlayButton()
-        updateWebsiteButton()
 
         showStatus("Выбрана станция: ${stations[index]}")
 
@@ -406,29 +361,6 @@ class MainActivity : Activity() {
                 0,
                 stationList.getChildAt(index).top
             )
-        }
-    }
-
-    private fun updateWebsiteButton() {
-        if (::websiteButton.isInitialized) {
-            val station = stations[selectedStation]
-
-            websiteButton.visibility =
-                if (websiteUrls.containsKey(station)) {
-                    View.VISIBLE
-                } else {
-                    View.GONE
-                }
-
-            websiteButton.text =
-                when (station) {
-                    "Мирадио" -> "МИРАДИО — СЛУШАТЬ НА САЙТЕ"
-                    "Радио Азан" -> "РАДИО АЗАН — СЛУШАТЬ"
-                    "Исламское Радио" -> "ИСЛАМСКОЕ РАДИО — СЛУШАТЬ"
-                    "Muslim" -> "MUSLIM — СЛУШАТЬ"
-                    "Радио Корана" -> "КОРАН — СЛУШАТЬ ЭФИР"
-                    else -> "СЛУШАТЬ НА САЙТЕ"
-                }
         }
     }
 
