@@ -29,31 +29,13 @@ class MainActivity : Activity() {
         "Коран — перевод на русский",
         "Коран — Мухаммад аль-Миншави",
         "Коран — Сауд аш-Шурайм",
-        "Радио Рекорд",
         "DFM",
-        "Радио ENERGY",
-        "Авторадио",
-        "Новое Радио",
-        "Love Radio",
-        "Русское Радио",
-        "Хит FM",
         "Like FM",
-        "Радио Maximum",
+        "Русское Радио",
         "Наше Радио",
-        "Rock FM",
         "Relax FM",
-        "Монте-Карло",
-        "Радио Джаз",
-        "Kiss FM",
-        "NRJ",
-        "Radio ONE",
-        "Мегаполис FM",
         "Радио Маяк",
-        "Радио России",
-        "Вести FM",
-        "Комсомольская правда",
-        "Ретро FM",
-        "Дорожное радио"
+        "Вести FM"
     )
 
     private val stationUrls = mapOf(
@@ -79,7 +61,28 @@ class MainActivity : Activity() {
             "https://radio.mp3islam.com/listen/minshawi/radio.mp3",
 
         "Коран — Сауд аш-Шурайм" to
-            "https://radio.mp3islam.com/listen/alshuraim/radio.mp3"
+            "https://radio.mp3islam.com/listen/alshuraim/radio.mp3",
+
+        "DFM" to
+            "https://dfm.hostingradio.ru/dfm96.aacp",
+
+        "Like FM" to
+            "https://hls-01-gpm.hostingradio.ru/likefm495/playlist.m3u8",
+
+        "Русское Радио" to
+            "https://rusradio.hostingradio.ru/rusradio96.aacp",
+
+        "Наше Радио" to
+            "http://nashe1.hostingradio.ru/nashe-128.mp3",
+
+        "Relax FM" to
+            "https://hls-01-gpm.hostingradio.ru/relaxfm7/playlist.m3u8",
+
+        "Радио Маяк" to
+            "https://icecast-vgtrk.cdnvideo.ru/mayakfm",
+
+        "Вести FM" to
+            "https://icecast-vgtrk.cdnvideo.ru/vestifm_aac_32kbps"
     )
 
     private var selectedStation = 0
@@ -305,7 +308,7 @@ class MainActivity : Activity() {
         val currentUrl = stationUrls[station]
 
         if (currentUrl == null) {
-            showStatus("Прямой поток пока не подключён")
+            showStatus("Прямой поток не подключён")
             return
         }
 
