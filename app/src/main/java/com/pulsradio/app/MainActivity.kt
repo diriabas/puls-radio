@@ -63,6 +63,7 @@ class MainActivity : Activity() {
 
     private var animationEnabled = true
     private var autoStartEnabled = false
+    private var stationTilesEnabled = false
 
     private lateinit var contentFrame: FrameLayout
     private lateinit var stationTitle: TextView
@@ -176,6 +177,7 @@ class MainActivity : Activity() {
 
         animationEnabled = prefs.getBoolean("animation", true)
         autoStartEnabled = prefs.getBoolean("auto_start", false)
+        stationTilesEnabled = prefs.getBoolean("station_tiles", false)
         selectedTheme = prefs.getString("theme", "blue") ?: "blue"
         applyThemeColors()
 
@@ -559,19 +561,69 @@ class MainActivity : Activity() {
         titleRow.addView(count)
         container.addView(titleRow)
 
-        stations.forEachIndexed { index, station ->
-            val card = createStationCard(index, station)
-            stationCards.add(card)
-
-            container.addView(
-                card,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    dp(76)
-                ).apply {
-                    bottomMargin = dp(8)
+        if (stationTilesEnabled) {
+            // Плитки располагаются по две в строке.
+            var index = 0
+            while (index < stations.size) {
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
                 }
-            )
+
+                val firstTile = createStationTile(index, stations[index])
+                stationCards.add(firstTile)
+                row.addView(
+                    firstTile,
+                    LinearLayout.LayoutParams(0, dp(148), 1f).apply {
+                        marginEnd = dp(5)
+                    }
+                )
+
+                if (index + 1 < stations.size) {
+                    val secondTile = createStationTile(index + 1, stations[index + 1])
+                    stationCards.add(secondTile)
+                    row.addView(
+                        secondTile,
+                        LinearLayout.LayoutParams(0, dp(148), 1f).apply {
+                            marginStart = dp(5)
+                        }
+                    )
+                } else {
+                    // Сохраняем ровную ширину последней строки при нечётном количестве станций.
+                    row.addView(
+                        View(this),
+                        LinearLayout.LayoutParams(0, dp(148), 1f).apply {
+                            marginStart = dp(5)
+                        }
+                    )
+                }
+
+                container.addView(
+                    row,
+                    LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        dp(148)
+                    ).apply {
+                        bottomMargin = dp(10)
+                    }
+                )
+                index += 2
+            }
+        } else {
+            stations.forEachIndexed { index, station ->
+                val card = createStationCard(index, station)
+                stationCards.add(card)
+
+                container.addView(
+                    card,
+                    LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        dp(76)
+                    ).apply {
+                        bottomMargin = dp(8)
+                    }
+                )
+            }
         }
 
         scroll.addView(container)
@@ -655,6 +707,86 @@ class MainActivity : Activity() {
         )
 
         return card
+    }
+
+    private fun createStationTile(
+        index: Int,
+        station: String
+    ): LinearLayout {
+        val tile = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = stationBackground(index == selectedStation)
+            setPadding(dp(8), dp(9), dp(8), dp(8))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                selectStation(index)
+            }
+        }
+
+        val icon = TextView(this).apply {
+            text = getStationIcon(station)
+            textSize = 27f
+            setTextColor(getStationIconColor(station))
+            gravity = Gravity.CENTER
+            background = roundedBackground(panelColor, 15)
+        }
+
+        tile.addView(
+            icon,
+            LinearLayout.LayoutParams(dp(52), dp(48)).apply {
+                gravity = Gravity.CENTER
+                bottomMargin = dp(7)
+            }
+        )
+
+        val name = TextView(this).apply {
+            text = station
+            textSize = 13f
+            setTextColor(textColor)
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            maxLines = 2
+        }
+        tile.addView(
+            name,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(36)
+            )
+        )
+
+        val description = TextView(this).apply {
+            text = getStationDescription(station)
+            textSize = 10f
+            setTextColor(secondaryColor)
+            gravity = Gravity.CENTER
+            maxLines = 1
+        }
+        tile.addView(
+            description,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(20)
+            )
+        )
+
+        val indicator = TextView(this).apply {
+            text = if (index == selectedStation && player?.isPlaying == true) "♫" else "›"
+            textSize = 15f
+            setTextColor(if (index == selectedStation) accentColor else secondaryColor)
+            gravity = Gravity.CENTER
+        }
+        tile.addView(
+            indicator,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(17)
+            )
+        )
+
+        return tile
     }
 
     private fun getStationIcon(station: String): String {
@@ -775,7 +907,8 @@ class MainActivity : Activity() {
                 index == selectedStation
             )
 
-            val indicator = card.getChildAt(2) as? TextView
+            val indicatorIndex = if (stationTilesEnabled) 3 else 2
+            val indicator = card.getChildAt(indicatorIndex) as? TextView
 
             indicator?.apply {
                 text = if (
@@ -852,6 +985,25 @@ class MainActivity : Activity() {
             }
         }
         container.addView(themeSetting)
+
+        container.addView(
+            createSwitchSetting(
+                "Плиточное отображение станций",
+                "Показывать радиостанции двумя колонками",
+                stationTilesEnabled
+            ) { enabled ->
+                stationTilesEnabled = enabled
+                prefs.edit()
+                    .putBoolean("station_tiles", enabled)
+                    .apply()
+
+                Toast.makeText(
+                    this,
+                    if (enabled) "Включён режим плиток" else "Включён список станций",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        )
 
         container.addView(sectionTitle("ВОСПРОИЗВЕДЕНИЕ"))
 
