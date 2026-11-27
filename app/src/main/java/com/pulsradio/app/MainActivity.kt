@@ -4,12 +4,15 @@ package com.pulsradio.app
 import android.app.Activity
 import android.os.Bundle
 import android.graphics.Color
+import android.content.res.ColorStateList
 import android.view.Gravity
-import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : Activity() {
 
@@ -47,10 +50,12 @@ class MainActivity : Activity() {
 
     private lateinit var stationTitle: TextView
     private lateinit var playButton: Button
+    private lateinit var stationList: LinearLayout
 
-    private val backgroundColor = Color.rgb(32, 36, 42)
-    private val panelColor = Color.rgb(48, 53, 62)
-    private val accentColor = Color.rgb(75, 145, 230)
+    private val backgroundColor = Color.rgb(30, 34, 42)
+    private val panelColor = Color.rgb(43, 49, 60)
+    private val buttonColor = Color.rgb(43, 75, 115)
+    private val accentColor = Color.rgb(55, 125, 205)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,10 +63,27 @@ class MainActivity : Activity() {
         window.statusBarColor = backgroundColor
         window.navigationBarColor = backgroundColor
 
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(backgroundColor)
-            setPadding(dp(16), dp(12), dp(16), dp(12))
+            clipToPadding = false
+        }
+
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars()
+            )
+
+            view.setPadding(
+                dp(16) + bars.left,
+                dp(12) + bars.top,
+                dp(16) + bars.right,
+                dp(12) + bars.bottom
+            )
+
+            insets
         }
 
         val header = TextView(this).apply {
@@ -100,18 +122,15 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
 
-        val previousButton = Button(this).apply {
-            text = "Назад"
+        val previousButton = createControlButton("НАЗАД").apply {
             setOnClickListener { changeStation(-1) }
         }
 
-        playButton = Button(this).apply {
-            text = "▶"
+        playButton = createControlButton("▶").apply {
             setOnClickListener { togglePlayback() }
         }
 
-        val nextButton = Button(this).apply {
-            text = "Далее"
+        val nextButton = createControlButton("ДАЛЕЕ").apply {
             setOnClickListener { changeStation(1) }
         }
 
@@ -140,9 +159,13 @@ class MainActivity : Activity() {
 
         root.addView(listTitle)
 
-        val scrollView = ScrollView(this)
+        val scrollView = ScrollView(this).apply {
+            clipToPadding = false
+            isFillViewport = true
+            setPadding(0, 0, 0, dp(8))
+        }
 
-        val stationList = LinearLayout(this).apply {
+        stationList = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
 
@@ -152,12 +175,13 @@ class MainActivity : Activity() {
                 textSize = 15f
                 gravity = Gravity.CENTER_VERTICAL
                 setTextColor(Color.WHITE)
-                setBackgroundColor(panelColor)
+                backgroundTintList = ColorStateList.valueOf(panelColor)
+
                 setOnClickListener {
                     selectedStation = index
                     isPlaying = false
                     updatePlayer()
-                    updateStationList(stationList)
+                    updateStationList()
                 }
             }
 
@@ -185,8 +209,20 @@ class MainActivity : Activity() {
 
         setContentView(root)
 
+        ViewCompat.requestApplyInsets(root)
+
         updatePlayer()
-        updateStationList(stationList)
+        updateStationList()
+    }
+
+    private fun createControlButton(label: String): Button {
+        return Button(this).apply {
+            text = label
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            backgroundTintList = ColorStateList.valueOf(buttonColor)
+            minWidth = dp(80)
+        }
     }
 
     private fun togglePlayback() {
@@ -200,6 +236,7 @@ class MainActivity : Activity() {
 
         isPlaying = false
         updatePlayer()
+        updateStationList()
     }
 
     private fun updatePlayer() {
@@ -207,11 +244,11 @@ class MainActivity : Activity() {
         playButton.text = if (isPlaying) "Ⅱ" else "▶"
     }
 
-    private fun updateStationList(list: LinearLayout) {
-        for (i in 0 until list.childCount) {
-            val button = list.getChildAt(i) as? Button ?: continue
+    private fun updateStationList() {
+        for (i in 0 until stationList.childCount) {
+            val button = stationList.getChildAt(i) as? Button ?: continue
 
-            button.setBackgroundColor(
+            button.backgroundTintList = ColorStateList.valueOf(
                 if (i == selectedStation) accentColor else panelColor
             )
         }
