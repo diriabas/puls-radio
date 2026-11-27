@@ -56,7 +56,7 @@ class MainActivity : Activity() {
             "https://hls-01-regions.emgsound.ru/11_msk/96/playlist.m3u8",
 
         "Радио Вера" to
-            "http://radiovera.hostingradio.ru:8007/radiovera_128",
+            "https://radiovera.hostingradio.ru:8007/radiovera_128",
 
         "Мирадио" to
             "http://s02.radio-tochka.com:6090/radio"
