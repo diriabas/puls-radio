@@ -2,6 +2,10 @@
 package com.pulsradio.app
 
 import android.app.Activity
+import android.content.ComponentName
+import android.content.Intent
+import android.content.ServiceConnection
+import android.os.IBinder
 import android.app.AlertDialog
 import android.os.Bundle
 import android.content.res.Configuration
@@ -147,6 +151,24 @@ class MainActivity : Activity() {
     private var activeStreamCandidates: List<String> = emptyList()
     private var activeStreamCandidateIndex = 0
     private var player: ExoPlayer? = null
+    private var playbackService: RadioPlaybackService? = null
+    private var serviceBound = false
+    private val playbackConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            val localBinder = binder as? RadioPlaybackService.LocalBinder ?: return
+            playbackService = localBinder.getService()
+            player = playbackService?.player
+            attachPlayerListener()
+            updatePlayerInformation()
+            updatePlayButton()
+            updateStationCards()
+            if (autoStartEnabled && player?.mediaItemCount == 0) playStation(selectedStation)
+        }
+        override fun onServiceDisconnected(name: ComponentName?) {
+            playbackService = null
+            player = null
+        }
+    }
     private var currentTab = 0
 
     private var animationEnabled = true
@@ -295,11 +317,28 @@ class MainActivity : Activity() {
 
         createMainLayout()
         showTab(0)
-        initializePlayer()
+    }
 
-        if (autoStartEnabled) {
-            playStation(selectedStation)
+    override fun onStart() {
+        super.onStart()
+        val intent = Intent(this, RadioPlaybackService::class.java)
+        serviceBound = bindService(intent, playbackConnection, Context.BIND_AUTO_CREATE)
+    }
+
+    override fun onStop() {
+        if (serviceBound) {
+            unbindService(playbackConnection)
+            serviceBound = false
         }
+        super.onStop()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        window.statusBarColor = backgroundColor
+        window.navigationBarColor = backgroundColor
+        createMainLayout()
+        showTab(currentTab)
     }
 
     private fun createMainLayout() {
@@ -313,7 +352,7 @@ class MainActivity : Activity() {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(8), dp(16), dp(10))
+            setPadding(dp(12), dp(if (isLandscape()) 1 else 4), dp(12), dp(if (isLandscape()) 2 else 5))
         }
 
         val logo = TextView(this).apply {
@@ -331,7 +370,7 @@ class MainActivity : Activity() {
         }
         val appName = TextView(this).apply {
             text = "пульс радио"
-            textSize = 20f
+            textSize = if (isLandscape()) 12f else 14f
             setTextColor(textColor)
             setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD), Typeface.BOLD)
             letterSpacing = 0.08f
@@ -341,7 +380,7 @@ class MainActivity : Activity() {
             background = roundedBackground(accentColor, 5)
         }
         titleColumn.addView(appName)
-        titleColumn.addView(accentLine, LinearLayout.LayoutParams(dp(82), dp(3)).apply {
+        titleColumn.addView(accentLine, LinearLayout.LayoutParams(dp(52), dp(2)).apply {
             topMargin = dp(3)
         })
         header.addView(titleColumn, LinearLayout.LayoutParams(0, dp(48), 1f))
@@ -426,18 +465,20 @@ class MainActivity : Activity() {
             setPadding(dp(13), dp(5), dp(13), dp(12))
         }
 
+        val columns = if (isLandscape()) 7 else 3
+        val tileHeight = if (isLandscape()) dp(86) else dp(126)
         var index = 0
         while (index < stations.size) {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            for (column in 0 until 3) {
+            for (column in 0 until columns) {
                 val stationIndex = index + column
-                val stationTileHeight = if (isLandscape()) dp(140) else dp(126)
+                val stationTileHeight = tileHeight
                 val params = LinearLayout.LayoutParams(0, stationTileHeight, 1f).apply {
-                    if (column > 0) marginStart = dp(4)
-                    if (column < 2) marginEnd = dp(4)
+                    if (column > 0) marginStart = dp(if (isLandscape()) 2 else 4)
+                    if (column < columns - 1) marginEnd = dp(if (isLandscape()) 2 else 4)
                 }
                 if (stationIndex < stations.size) {
                     val tile = createStationTile(stationIndex, stations[stationIndex])
@@ -448,9 +489,9 @@ class MainActivity : Activity() {
                 }
             }
             container.addView(row, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, if (isLandscape()) dp(140) else dp(126)
-            ).apply { bottomMargin = dp(8) })
-            index += 3
+                LinearLayout.LayoutParams.MATCH_PARENT, tileHeight
+            ).apply { bottomMargin = dp(if (isLandscape()) 4 else 8) })
+            index += columns
         }
         scroll.addView(container)
         return scroll
@@ -727,7 +768,7 @@ class MainActivity : Activity() {
 
         tile.addView(
             icon,
-            LinearLayout.LayoutParams(iconDp(44), iconDp(40)).apply {
+            LinearLayout.LayoutParams(if (isLandscape()) dp(27) else iconDp(44), if (isLandscape()) dp(25) else iconDp(40)).apply {
                 gravity = Gravity.CENTER
                 bottomMargin = dp(5)
             }
@@ -735,7 +776,7 @@ class MainActivity : Activity() {
 
         val name = TextView(this).apply {
             text = station
-            textSize = 10.5f
+            textSize = if (isLandscape()) 7f else 10.5f
             setTextColor(textColor)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
@@ -745,13 +786,13 @@ class MainActivity : Activity() {
             name,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(34)
+                (if (isLandscape()) dp(24) else dp(34))
             )
         )
 
         val description = TextView(this).apply {
             text = getStationDescription(station)
-            textSize = 7.5f
+            textSize = if (isLandscape()) 6f else 7.5f
             setTextColor(secondaryColor)
             gravity = Gravity.CENTER
             maxLines = 1
@@ -875,8 +916,12 @@ class MainActivity : Activity() {
     }
 
     private fun playStation(index: Int) {
-        val currentPlayer = player ?: return
         if (index !in stations.indices) return
+        val currentPlayer = player
+        if (currentPlayer == null) {
+            showStatus("Подключение проигрывателя…")
+            return
+        }
 
         val station = stations[index]
         val url = stationUrls[station]
@@ -901,6 +946,10 @@ class MainActivity : Activity() {
 
         val requestId = ++streamRequestId
         showStatus("Подключение: $station")
+        startService(Intent(this, RadioPlaybackService::class.java).apply {
+            action = RadioPlaybackService.ACTION_PLAY
+            putExtra(RadioPlaybackService.EXTRA_STATION, station)
+        })
 
         val firstCandidate = activeStreamCandidates.firstOrNull() ?: url
         if (firstCandidate.endsWith(".m3u", ignoreCase = true) &&
@@ -1055,18 +1104,19 @@ class MainActivity : Activity() {
             Triple("Станция", stations[selectedStation], "last"),
             Triple("Версия приложения", getInstalledVersion(), "about")
         )
+        val columns = 3
+        val settingsTileHeight = if (isLandscape()) dp(92) else dp(126)
         var index = 0
         while (index < gridItems.size) {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            for (column in 0 until 3) {
+            for (column in 0 until columns) {
                 val itemIndex = index + column
-                val settingsTileHeight = if (isLandscape()) dp(142) else dp(126)
                 val params = LinearLayout.LayoutParams(0, settingsTileHeight, 1f).apply {
-                    if (column > 0) marginStart = dp(4)
-                    if (column < 2) marginEnd = dp(4)
+                    if (column > 0) marginStart = dp(if (isLandscape()) 2 else 4)
+                    if (column < columns - 1) marginEnd = dp(if (isLandscape()) 2 else 4)
                 }
                 if (itemIndex < gridItems.size) {
                     val item = gridItems[itemIndex]
@@ -1076,9 +1126,9 @@ class MainActivity : Activity() {
                 }
             }
             container.addView(row, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, if (isLandscape()) dp(142) else dp(126)
+                LinearLayout.LayoutParams.MATCH_PARENT, settingsTileHeight
             ).apply { bottomMargin = dp(8) })
-            index += 3
+            index += columns
         }
         scroll.addView(container)
         return scroll
@@ -1493,63 +1543,43 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun initializePlayer() {
-        try {
-            player = ExoPlayer.Builder(this).build()
-
-            player?.addListener(object : Player.Listener {
-
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    updatePlayButton()
-                    updateStationCards()
-
-                    if (currentTab == 0) {
-                        if (isPlaying && animationEnabled) {
-                            startAnimations()
-                        } else {
-                            stopAnimations()
-                        }
-                    }
+    private fun attachPlayerListener() {
+        val current = player ?: return
+        current.clearListeners()
+        current.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                updatePlayButton()
+                updateStationCards()
+                if (currentTab == 0) {
+                    if (isPlaying && animationEnabled) startAnimations() else stopAnimations()
                 }
-
-                override fun onPlaybackStateChanged(state: Int) {
-                    when (state) {
-                        Player.STATE_BUFFERING ->
-                            showStatus("Подключение к эфиру...")
-
-                        Player.STATE_READY ->
-                            showStatus("Эфир подключён")
-
-                        Player.STATE_ENDED ->
-                            showStatus("Эфир завершён")
-
-                        Player.STATE_IDLE ->
-                            showStatus("Ожидание")
-                    }
-
-                    updatePlayButton()
+                playbackService?.updatePlaybackNotification(stations[selectedStation], isPlaying)
+            }
+            override fun onPlaybackStateChanged(state: Int) {
+                when (state) {
+                    Player.STATE_BUFFERING -> showStatus("Подключение к эфиру...")
+                    Player.STATE_READY -> showStatus("Эфир подключён")
+                    Player.STATE_ENDED -> showStatus("Эфир завершён")
+                    Player.STATE_IDLE -> showStatus("Ожидание")
+                }
+                updatePlayButton()
+                updateStationCards()
+            }
+            override fun onPlayerError(error: PlaybackException) {
+                val nextIndex = activeStreamCandidateIndex + 1
+                if (nextIndex < activeStreamCandidates.size) {
+                    activeStreamCandidateIndex = nextIndex
+                    val fallbackUrl = activeStreamCandidates[nextIndex]
+                    showStatus("Основной поток недоступен. Пробуем резервный…")
+                    Log.w("PulsRadio", "Переключение на резервный поток: $fallbackUrl", error)
+                    startStationPlayback(current, fallbackUrl, stations[selectedStation])
+                } else {
+                    reportError("Не удалось подключиться к ${stations[selectedStation]}", error)
+                    stopAnimations()
                     updateStationCards()
                 }
-
-                override fun onPlayerError(error: PlaybackException) {
-                    val nextIndex = activeStreamCandidateIndex + 1
-                    if (nextIndex < activeStreamCandidates.size) {
-                        activeStreamCandidateIndex = nextIndex
-                        val fallbackUrl = activeStreamCandidates[nextIndex]
-                        showStatus("Основной поток недоступен. Пробуем резервный…")
-                        Log.w("PulsRadio", "Переключение на резервный поток: $fallbackUrl", error)
-                        startStationPlayback(this@MainActivity.player ?: return, fallbackUrl, stations[selectedStation])
-                    } else {
-                        reportError("Не удалось подключиться к ${stations[selectedStation]}", error)
-                        stopAnimations()
-                        updateStationCards()
-                    }
-                }
-            })
-
-        } catch (error: Throwable) {
-            reportError("Ошибка создания проигрывателя", error)
-        }
+            }
+        })
     }
 
     private fun dp(value: Int): Int {
@@ -1558,14 +1588,9 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         stopAnimations()
-
-        try {
-            player?.release()
-            player = null
-        } catch (error: Throwable) {
-            Log.e("PulsRadio", "Ошибка освобождения проигрывателя", error)
-        }
-
+        // Проигрыватель принадлежит RadioPlaybackService и переживает поворот экрана.
+        player = null
+        playbackService = null
         super.onDestroy()
     }
 }
