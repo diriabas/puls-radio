@@ -16,6 +16,8 @@ import android.graphics.drawable.GradientDrawable
 import android.animation.ValueAnimator
 import android.animation.ArgbEvaluator
 import android.util.Log
+import java.net.HttpURLConnection
+import java.net.URL
 
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -50,10 +52,10 @@ class MainActivity : Activity() {
     // после сборки каждый новый поток нужно проверить на устройстве.
     private val stationUrls = mapOf(
         "Европа Плюс" to
-            "https://hls-01-regions.emgsound.ru/11_msk/96/playlist.m3u8",
+            "https://hls-02-europaplus.emgsound.ru/11/playlist.m3u8",
 
         "Радио Вера" to
-            "https://radiovera.hostingradio.ru:8007/radiovera_128",
+            "http://radiovera.hostingradio.ru:8007/radiovera_128",
 
         "Коран — перевод на русский" to
             "https://backup.qurango.net/radio/translation_quran_Russia",
@@ -68,22 +70,22 @@ class MainActivity : Activity() {
             "https://rusradio.hostingradio.ru/rusradio96.aacp",
 
         "Радио Рекорд" to
-            "http://hls-01-radiorecord.hostingradio.ru/record-msk/playlist.m3u8",
+            "https://hls-01-radiorecord.hostingradio.ru/record-msk/playlist.m3u8",
 
         "ENERGY" to
-            "http://hls-01-gpm.hostingradio.ru/energyfm343/128/playlist.m3u8",
+            "https://hls-01-gpm.hostingradio.ru/energyfm343/128/playlist.m3u8",
 
         "Авторадио" to
-            "http://hls-01-gpm.hostingradio.ru/avtoradio343/128/playlist.m3u8",
+            "https://hls-01-gpm.hostingradio.ru/avtoradio343/128/playlist.m3u8",
 
         "Новое Радио" to
-            "http://stream.newradio.ru/moscow.novoe.aacp",
+            "https://hls.newradio.ru/novoeradio-msk/playlist.m3u8",
 
         "Love Radio" to
             "http://microit.n340.com:9000/VgMv0WV17ZVx1uuo_12_love_128_reg_60967",
 
         "Хит FM" to
-            "http://23.105.238.4/hitfm96.aacp",
+            "https://hitfm.hostingradio.ru/hitfm96.aacp",
 
         "Радио Maximum" to
             "http://maximum.hostingradio.ru/maximum128.mp3",
@@ -92,19 +94,19 @@ class MainActivity : Activity() {
             "https://nashe1.hostingradio.ru/nashe-128.mp3",
 
         "Relax FM" to
-            "http://23.105.238.4/gpm-relaxfm495.aacp",
+            "https://hls-01-gpm.hostingradio.ru/relaxfm7/playlist.m3u8",
 
         "Радио Джаз" to
             "http://nashe1.hostingradio.ru/jazz-128.mp3",
 
         "Ретро FM" to
-            "http://emgregion.hostingradio.ru:8064/moscow.retrofm.mp3",
+            "https://hls-01-retro.emgsound.ru/12/128/playlist.m3u8",
 
         "Дорожное Радио" to
-            "http://emgregion.hostingradio.ru:8064/ekb.dorognoe.mp3",
+            "https://dorognoe.hostingradio.ru:8000/dorognoe",
 
         "Джем FM" to
-            "https://online.jamfm.ru/hls/high.m3u8"
+            "https://jamfm.ru/jamfm.m3u"
     )
 
     private val prefs by lazy {
@@ -112,6 +114,8 @@ class MainActivity : Activity() {
     }
 
     private var selectedStation = 0
+    private var streamRequestId = 0
+    private var currentStreamUrl: String? = null
     private var player: ExoPlayer? = null
     private var currentTab = 0
 
@@ -319,7 +323,7 @@ class MainActivity : Activity() {
             setPadding(dp(12), dp(5), dp(12), dp(5))
             background = roundedBackground(
                 Color.rgb(12, 26, 42),
-                18
+                22
             )
         }
 
@@ -336,20 +340,24 @@ class MainActivity : Activity() {
 
         bottomBar.addView(
             radioTab,
-            LinearLayout.LayoutParams(0, dp(56), 1f)
+            LinearLayout.LayoutParams(0, dp(60), 1f)
         )
 
         bottomBar.addView(
             settingsTab,
-            LinearLayout.LayoutParams(0, dp(56), 1f)
+            LinearLayout.LayoutParams(0, dp(60), 1f)
         )
 
         root.addView(
             bottomBar,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(66)
-            )
+                dp(70)
+            ).apply {
+                leftMargin = dp(22)
+                rightMargin = dp(22)
+                bottomMargin = dp(3)
+            }
         )
 
         setContentView(root)
@@ -480,43 +488,32 @@ class MainActivity : Activity() {
                     gravity = Gravity.CENTER_VERTICAL
                 }
 
-                val firstTile = createStationTile(index, stations[index])
-                stationCards.add(firstTile)
-                row.addView(
-                    firstTile,
-                    LinearLayout.LayoutParams(0, dp(148), 1f).apply {
-                        marginEnd = dp(5)
+                for (column in 0 until 3) {
+                    val stationIndex = index + column
+                    val tileParams = LinearLayout.LayoutParams(0, dp(116), 1f).apply {
+                        if (column > 0) marginStart = dp(4)
+                        if (column < 2) marginEnd = dp(4)
                     }
-                )
 
-                if (index + 1 < stations.size) {
-                    val secondTile = createStationTile(index + 1, stations[index + 1])
-                    stationCards.add(secondTile)
-                    row.addView(
-                        secondTile,
-                        LinearLayout.LayoutParams(0, dp(148), 1f).apply {
-                            marginStart = dp(5)
-                        }
-                    )
-                } else {
-                    row.addView(
-                        View(this),
-                        LinearLayout.LayoutParams(0, dp(148), 1f).apply {
-                            marginStart = dp(5)
-                        }
-                    )
+                    if (stationIndex < stations.size) {
+                        val tile = createStationTile(stationIndex, stations[stationIndex])
+                        stationCards.add(tile)
+                        row.addView(tile, tileParams)
+                    } else {
+                        row.addView(View(this), tileParams)
+                    }
                 }
 
                 container.addView(
                     row,
                     LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
-                        dp(148)
+                        dp(116)
                     ).apply {
-                        bottomMargin = dp(10)
+                        bottomMargin = dp(8)
                     }
                 )
-                index += 2
+                index += 3
             }
         } else {
             stations.forEachIndexed { index, station ->
@@ -545,7 +542,7 @@ class MainActivity : Activity() {
                 Color.rgb(8, 48, 77),
                 Color.rgb(5, 19, 38)
             )
-            setPadding(dp(10), dp(7), dp(10), dp(5))
+            setPadding(0, dp(4), 0, dp(3))
         }
 
         playerCard = panel
@@ -553,6 +550,7 @@ class MainActivity : Activity() {
         val controlsRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), dp(3), dp(10), dp(3))
         }
 
         stationIcon = TextView(this).apply {
@@ -649,18 +647,17 @@ class MainActivity : Activity() {
         val equalizer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(0, dp(4), 0, 0)
         }
 
         visualizerBars.clear()
-        repeat(27) {
+        repeat(64) {
             val bar = View(this).apply {
-                background = roundedBackground(accentColor, 3)
+                background = roundedBackground(accentColor, 2)
             }
             visualizerBars.add(bar)
             equalizer.addView(
                 bar,
-                LinearLayout.LayoutParams(dp(3), dp(3)).apply {
+                LinearLayout.LayoutParams(0, dp(2), 1f).apply {
                     marginStart = dp(1)
                     marginEnd = dp(1)
                 }
@@ -671,7 +668,7 @@ class MainActivity : Activity() {
             equalizer,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(14)
+                dp(7)
             )
         )
 
@@ -786,7 +783,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             background = stationBackground(index == selectedStation)
-            setPadding(dp(8), dp(9), dp(8), dp(8))
+            setPadding(dp(4), dp(5), dp(4), dp(4))
             isClickable = true
             isFocusable = true
             setOnClickListener {
@@ -804,15 +801,15 @@ class MainActivity : Activity() {
 
         tile.addView(
             icon,
-            LinearLayout.LayoutParams(dp(52), dp(48)).apply {
+            LinearLayout.LayoutParams(dp(42), dp(36)).apply {
                 gravity = Gravity.CENTER
-                bottomMargin = dp(7)
+                bottomMargin = dp(3)
             }
         )
 
         val name = TextView(this).apply {
             text = station
-            textSize = 13f
+            textSize = 11f
             setTextColor(textColor)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
@@ -828,7 +825,7 @@ class MainActivity : Activity() {
 
         val description = TextView(this).apply {
             text = getStationDescription(station)
-            textSize = 10f
+            textSize = 8f
             setTextColor(secondaryColor)
             gravity = Gravity.CENTER
             maxLines = 1
@@ -837,7 +834,7 @@ class MainActivity : Activity() {
             description,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(20)
+                dp(15)
             )
         )
 
@@ -851,7 +848,7 @@ class MainActivity : Activity() {
             indicator,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(17)
+                dp(13)
             )
         )
 
@@ -947,29 +944,91 @@ class MainActivity : Activity() {
 
     private fun playStation(index: Int) {
         val currentPlayer = player ?: return
+        if (index !in stations.indices) return
+
         val station = stations[index]
-        val url = stationUrls[station] ?: return
+        val url = stationUrls[station]
 
+        if (url.isNullOrBlank()) {
+            showStatus("Для станции не задан адрес эфира")
+            Toast.makeText(this, "Нет адреса потока: $station", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        selectedStation = index
+        prefs.edit()
+            .putInt("last_station", index)
+            .apply()
+
+        updatePlayerInformation()
+        updateStationCards()
+        updatePlayButton()
+
+        val requestId = ++streamRequestId
+        showStatus("Подключение: $station")
+
+        if (url.endsWith(".m3u", ignoreCase = true) &&
+            !url.endsWith(".m3u8", ignoreCase = true)
+        ) {
+            Thread {
+                var connection: HttpURLConnection? = null
+                try {
+                    connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 10000
+                        readTimeout = 10000
+                        instanceFollowRedirects = true
+                        requestMethod = "GET"
+                    }
+
+                    val resolvedUrl = connection.inputStream
+                        .bufferedReader()
+                        .useLines { lines ->
+                            lines.map { it.trim() }
+                                .firstOrNull {
+                                    it.isNotEmpty() &&
+                                        !it.startsWith("#") &&
+                                        (it.startsWith("http://") ||
+                                            it.startsWith("https://"))
+                                }
+                        }
+
+                    runOnUiThread {
+                        if (requestId != streamRequestId) return@runOnUiThread
+                        if (resolvedUrl.isNullOrBlank()) {
+                            showStatus("Не удалось получить адрес эфира")
+                            return@runOnUiThread
+                        }
+                        startStationPlayback(currentPlayer, resolvedUrl, station)
+                    }
+                } catch (error: Throwable) {
+                    runOnUiThread {
+                        if (requestId == streamRequestId) {
+                            reportError("Не удалось получить поток $station", error)
+                        }
+                    }
+                } finally {
+                    connection?.disconnect()
+                }
+            }.start()
+        } else {
+            startStationPlayback(currentPlayer, url, station)
+        }
+    }
+
+    private fun startStationPlayback(
+        currentPlayer: ExoPlayer,
+        url: String,
+        station: String
+    ) {
         try {
-            selectedStation = index
-
+            currentStreamUrl = url
             currentPlayer.stop()
             currentPlayer.setMediaItem(MediaItem.fromUri(url))
             currentPlayer.prepare()
             currentPlayer.play()
-
-            prefs.edit()
-                .putInt("last_station", index)
-                .apply()
-
-            updatePlayerInformation()
-            updateStationCards()
-            updatePlayButton()
-
             showStatus("Запуск: $station")
-
         } catch (error: Throwable) {
-            reportError("Ошибка запуска станции", error)
+            reportError("Ошибка запуска станции $station", error)
         }
     }
 
@@ -982,7 +1041,9 @@ class MainActivity : Activity() {
                 showStatus("Пауза")
             } else {
                 if (currentPlayer.playbackState == Player.STATE_IDLE) {
-                    val url = stationUrls[stations[selectedStation]] ?: return
+                    val url = currentStreamUrl
+                        ?: stationUrls[stations[selectedStation]]
+                        ?: return
                     currentPlayer.setMediaItem(MediaItem.fromUri(url))
                     currentPlayer.prepare()
                 }
@@ -1110,7 +1171,7 @@ class MainActivity : Activity() {
         container.addView(
             createSwitchSetting(
                 "Плиточное отображение станций",
-                "Показывать радиостанции двумя колонками",
+                "Показывать радиостанции в три колонки",
                 stationTilesEnabled
             ) { enabled ->
                 stationTilesEnabled = enabled
@@ -1333,7 +1394,7 @@ class MainActivity : Activity() {
                     )
 
                     val params = bar.layoutParams
-                    params.height = dp((3 + wave * 9).toInt())
+                    params.height = dp((1 + wave * 5).toInt())
                     bar.layoutParams = params
                 }
             }
@@ -1374,7 +1435,7 @@ class MainActivity : Activity() {
 
         visualizerBars.forEach { bar ->
             val params = bar.layoutParams
-            params.height = dp(9)
+            params.height = dp(2)
             bar.layoutParams = params
         }
     }
