@@ -30,9 +30,24 @@ class MainActivity : Activity() {
         "Коран — перевод на русский",
         "DFM",
         "Like FM",
-        "Русское Радио"
+        "Русское Радио",
+        "Радио Рекорд",
+        "ENERGY",
+        "Авторадио",
+        "Новое Радио",
+        "Love Radio",
+        "Хит FM",
+        "Радио Maximum",
+        "Наше Радио",
+        "Relax FM",
+        "Радио Джаз",
+        "Ретро FM",
+        "Дорожное Радио",
+        "Джем FM"
     )
 
+    // Прямые потоки. Некоторые вещатели могут менять адреса эфира;
+    // после сборки каждый новый поток нужно проверить на устройстве.
     private val stationUrls = mapOf(
         "Европа Плюс" to
             "https://hls-01-regions.emgsound.ru/11_msk/96/playlist.m3u8",
@@ -50,7 +65,46 @@ class MainActivity : Activity() {
             "https://hls-01-gpm.hostingradio.ru/likefm495/playlist.m3u8",
 
         "Русское Радио" to
-            "https://rusradio.hostingradio.ru/rusradio96.aacp"
+            "https://rusradio.hostingradio.ru/rusradio96.aacp",
+
+        "Радио Рекорд" to
+            "http://hls-01-radiorecord.hostingradio.ru/record-msk/playlist.m3u8",
+
+        "ENERGY" to
+            "http://hls-01-gpm.hostingradio.ru/energyfm343/128/playlist.m3u8",
+
+        "Авторадио" to
+            "http://hls-01-gpm.hostingradio.ru/avtoradio343/128/playlist.m3u8",
+
+        "Новое Радио" to
+            "http://stream.newradio.ru/moscow.novoe.aacp",
+
+        "Love Radio" to
+            "http://microit.n340.com:9000/VgMv0WV17ZVx1uuo_12_love_128_reg_60967",
+
+        "Хит FM" to
+            "http://23.105.238.4/hitfm96.aacp",
+
+        "Радио Maximum" to
+            "http://maximum.hostingradio.ru/maximum128.mp3",
+
+        "Наше Радио" to
+            "https://nashe1.hostingradio.ru/nashe-128.mp3",
+
+        "Relax FM" to
+            "http://23.105.238.4/gpm-relaxfm495.aacp",
+
+        "Радио Джаз" to
+            "http://nashe1.hostingradio.ru/jazz-128.mp3",
+
+        "Ретро FM" to
+            "http://emgregion.hostingradio.ru:8064/moscow.retrofm.mp3",
+
+        "Дорожное Радио" to
+            "http://emgregion.hostingradio.ru:8064/ekb.dorognoe.mp3",
+
+        "Джем FM" to
+            "https://online.jamfm.ru/hls/high.m3u8"
     )
 
     private val prefs by lazy {
@@ -72,6 +126,7 @@ class MainActivity : Activity() {
     private lateinit var playButton: TextView
     private lateinit var statusText: TextView
     private lateinit var playerCard: LinearLayout
+    private lateinit var miniPlayer: LinearLayout
     private lateinit var radioTab: TextView
     private lateinit var settingsTab: TextView
 
@@ -244,6 +299,20 @@ class MainActivity : Activity() {
             )
         )
 
+        miniPlayer = createMiniPlayer()
+        root.addView(
+            miniPlayer,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                leftMargin = dp(10)
+                rightMargin = dp(10)
+                topMargin = dp(5)
+                bottomMargin = dp(5)
+            }
+        )
+
         val bottomBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -339,6 +408,7 @@ class MainActivity : Activity() {
         stopAnimations()
 
         contentFrame.removeAllViews()
+        miniPlayer.visibility = if (tab == 0) View.VISIBLE else View.GONE
 
         if (tab == 0) {
             contentFrame.addView(createRadioScreen())
@@ -364,7 +434,6 @@ class MainActivity : Activity() {
 
     private fun createRadioScreen(): View {
         stationCards.clear()
-        visualizerBars.clear()
 
         val scroll = ScrollView(this).apply {
             clipToPadding = false
@@ -372,165 +441,8 @@ class MainActivity : Activity() {
 
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(5), dp(16), dp(18))
+            setPadding(dp(16), dp(10), dp(16), dp(16))
         }
-
-        playerCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            background = playerBackground(
-                Color.rgb(8, 48, 77),
-                Color.rgb(5, 19, 38)
-            )
-            setPadding(dp(18), dp(20), dp(18), dp(20))
-        }
-
-        val liveLabel = TextView(this).apply {
-            text = "●   ПРЯМОЙ ЭФИР"
-            textSize = 12f
-            setTextColor(Color.rgb(85, 225, 255))
-            gravity = Gravity.CENTER
-            letterSpacing = 0.16f
-        }
-
-        playerCard.addView(liveLabel)
-
-        // Большая декоративная область с ореолом и значком станции.
-        val artwork = FrameLayout(this).apply {
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(
-                    Color.rgb(12, 69, 100),
-                    Color.rgb(9, 36, 67),
-                    Color.rgb(15, 25, 55)
-                )
-            ).apply {
-                cornerRadius = dp(90).toFloat()
-                setStroke(dp(1), Color.rgb(57, 159, 202))
-            }
-        }
-
-        val glow = View(this).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.rgb(16, 105, 145))
-                setStroke(dp(2), Color.rgb(74, 205, 255))
-            }
-            alpha = 0.48f
-        }
-
-        artwork.addView(
-            glow,
-            FrameLayout.LayoutParams(dp(112), dp(112)).apply {
-                gravity = Gravity.CENTER
-            }
-        )
-
-        stationIcon = TextView(this).apply {
-            text = getStationIcon(stations[selectedStation])
-            textSize = 57f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            typeface = Typeface.DEFAULT_BOLD
-        }
-
-        artwork.addView(
-            stationIcon,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-
-        playerCard.addView(
-            artwork,
-            LinearLayout.LayoutParams(dp(154), dp(154)).apply {
-                gravity = Gravity.CENTER
-                topMargin = dp(17)
-                bottomMargin = dp(10)
-            }
-        )
-
-        stationTitle = TextView(this).apply {
-            textSize = 25f
-            setTextColor(textColor)
-            gravity = Gravity.CENTER
-            setTypeface(null, Typeface.BOLD)
-            setPadding(0, dp(8), 0, dp(4))
-            maxLines = 2
-        }
-
-        stationSubtitle = TextView(this).apply {
-            textSize = 13f
-            setTextColor(secondaryColor)
-            gravity = Gravity.CENTER
-        }
-
-        playerCard.addView(stationTitle)
-        playerCard.addView(stationSubtitle)
-
-        // Визуализатор
-        val visualizer = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(0, dp(17), 0, dp(17))
-        }
-
-        repeat(23) {
-            val bar = View(this).apply {
-                background = roundedBackground(accentColor, 5)
-            }
-
-            visualizerBars.add(bar)
-
-            visualizer.addView(
-                bar,
-                LinearLayout.LayoutParams(dp(5), dp(9)).apply {
-                    marginStart = dp(2)
-                    marginEnd = dp(2)
-                }
-            )
-        }
-
-        playerCard.addView(visualizer)
-
-        playButton = TextView(this).apply {
-            text = "▶"
-            textSize = 27f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            background = roundAccentBackground()
-            setOnClickListener {
-                togglePlayback()
-            }
-        }
-
-        playerCard.addView(
-            playButton,
-            LinearLayout.LayoutParams(dp(70), dp(70)).apply {
-                gravity = Gravity.CENTER
-            }
-        )
-
-        statusText = TextView(this).apply {
-            textSize = 12f
-            setTextColor(secondaryColor)
-            gravity = Gravity.CENTER
-            setPadding(0, dp(12), 0, dp(2))
-            text = "Выбери радиостанцию"
-        }
-
-        playerCard.addView(statusText)
-
-        container.addView(
-            playerCard,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = dp(20)
-            }
-        )
 
         val titleRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -557,12 +469,10 @@ class MainActivity : Activity() {
             listTitle,
             LinearLayout.LayoutParams(0, dp(40), 1f)
         )
-
         titleRow.addView(count)
         container.addView(titleRow)
 
         if (stationTilesEnabled) {
-            // Плитки располагаются по две в строке.
             var index = 0
             while (index < stations.size) {
                 val row = LinearLayout(this).apply {
@@ -589,7 +499,6 @@ class MainActivity : Activity() {
                         }
                     )
                 } else {
-                    // Сохраняем ровную ширину последней строки при нечётном количестве станций.
                     row.addView(
                         View(this),
                         LinearLayout.LayoutParams(0, dp(148), 1f).apply {
@@ -613,7 +522,6 @@ class MainActivity : Activity() {
             stations.forEachIndexed { index, station ->
                 val card = createStationCard(index, station)
                 stationCards.add(card)
-
                 container.addView(
                     card,
                     LinearLayout.LayoutParams(
@@ -628,6 +536,167 @@ class MainActivity : Activity() {
 
         scroll.addView(container)
         return scroll
+    }
+
+    private fun createMiniPlayer(): LinearLayout {
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = playerBackground(
+                Color.rgb(8, 48, 77),
+                Color.rgb(5, 19, 38)
+            )
+            setPadding(dp(10), dp(7), dp(10), dp(5))
+        }
+
+        playerCard = panel
+
+        val controlsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        stationIcon = TextView(this).apply {
+            text = getStationIcon(stations[selectedStation])
+            textSize = logoTextSize(stations[selectedStation])
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            background = roundedBackground(
+                getStationLogoColor(stations[selectedStation]),
+                12
+            )
+        }
+
+        controlsRow.addView(
+            stationIcon,
+            LinearLayout.LayoutParams(dp(44), dp(44)).apply {
+                marginEnd = dp(9)
+            }
+        )
+
+        val textColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        stationTitle = TextView(this).apply {
+            textSize = 14f
+            setTextColor(textColor)
+            setTypeface(null, Typeface.BOLD)
+            maxLines = 1
+        }
+
+        stationSubtitle = TextView(this).apply {
+            textSize = 10f
+            setTextColor(secondaryColor)
+            maxLines = 1
+        }
+
+        statusText = TextView(this).apply {
+            text = "Готово к воспроизведению"
+            textSize = 9f
+            setTextColor(secondaryColor)
+            maxLines = 1
+        }
+
+        textColumn.addView(stationTitle)
+        textColumn.addView(stationSubtitle)
+        textColumn.addView(statusText)
+
+        controlsRow.addView(
+            textColumn,
+            LinearLayout.LayoutParams(0, dp(46), 1f)
+        )
+
+        val previousButton = createMiniControl("⏮", 20f)
+        previousButton.setOnClickListener {
+            val previous = if (selectedStation == 0) stations.lastIndex else selectedStation - 1
+            playStation(previous)
+        }
+
+        playButton = createMiniControl("▶", 19f).apply {
+            background = roundAccentBackground()
+            setTextColor(Color.WHITE)
+        }
+
+        playButton.setOnClickListener {
+            togglePlayback()
+        }
+
+        val nextButton = createMiniControl("⏭", 20f)
+        nextButton.setOnClickListener {
+            val next = (selectedStation + 1) % stations.size
+            playStation(next)
+        }
+
+        controlsRow.addView(
+            previousButton,
+            LinearLayout.LayoutParams(dp(34), dp(42))
+        )
+        controlsRow.addView(
+            playButton,
+            LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                marginStart = dp(3)
+                marginEnd = dp(3)
+            }
+        )
+        controlsRow.addView(
+            nextButton,
+            LinearLayout.LayoutParams(dp(34), dp(42))
+        )
+
+        panel.addView(controlsRow)
+
+        val equalizer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, dp(4), 0, 0)
+        }
+
+        visualizerBars.clear()
+        repeat(27) {
+            val bar = View(this).apply {
+                background = roundedBackground(accentColor, 3)
+            }
+            visualizerBars.add(bar)
+            equalizer.addView(
+                bar,
+                LinearLayout.LayoutParams(dp(3), dp(3)).apply {
+                    marginStart = dp(1)
+                    marginEnd = dp(1)
+                }
+            )
+        }
+
+        panel.addView(
+            equalizer,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(14)
+            )
+        )
+
+        return panel
+    }
+
+    private fun createMiniControl(symbol: String, size: Float): TextView {
+        return TextView(this).apply {
+            text = symbol
+            textSize = size
+            setTextColor(textColor)
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+        }
+    }
+
+    private fun logoTextSize(station: String): Float {
+        val length = getStationIcon(station).length
+        return when {
+            length >= 5 -> 9f
+            length >= 4 -> 11f
+            length >= 3 -> 14f
+            else -> 23f
+        }
     }
 
     private fun createStationCard(
@@ -650,11 +719,11 @@ class MainActivity : Activity() {
 
         val icon = TextView(this).apply {
             text = getStationIcon(station)
-            textSize = 24f
-            setTextColor(getStationIconColor(station))
+            textSize = logoTextSize(station)
+            setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             background = roundedBackground(
-                Color.rgb(11, 42, 62),
+                getStationLogoColor(station),
                 14
             )
         }
@@ -727,10 +796,10 @@ class MainActivity : Activity() {
 
         val icon = TextView(this).apply {
             text = getStationIcon(station)
-            textSize = 27f
-            setTextColor(getStationIconColor(station))
+            textSize = logoTextSize(station)
+            setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            background = roundedBackground(panelColor, 15)
+            background = roundedBackground(getStationLogoColor(station), 15)
         }
 
         tile.addView(
@@ -791,22 +860,56 @@ class MainActivity : Activity() {
 
     private fun getStationIcon(station: String): String {
         return when (station) {
-            "Европа Плюс" -> "♫"
-            "Радио Вера" -> "✧"
+            "Европа Плюс" -> "EP"
+            "Радио Вера" -> "ВЕРА"
             "Коран — перевод на русский" -> "☪"
-            "DFM" -> "D"
-            "Like FM" -> "L"
-            "Русское Радио" -> "R"
-            else -> "♪"
+            "DFM" -> "DFM"
+            "Like FM" -> "LIKE"
+            "Русское Радио" -> "РР"
+            "Радио Рекорд" -> "REC"
+            "ENERGY" -> "NRJ"
+            "Авторадио" -> "AUTO"
+            "Новое Радио" -> "NEW"
+            "Love Radio" -> "LOVE"
+            "Хит FM" -> "HIT"
+            "Радио Maximum" -> "MAX"
+            "Наше Радио" -> "НАШЕ"
+            "Relax FM" -> "RELAX"
+            "Радио Джаз" -> "JAZZ"
+            "Ретро FM" -> "RETRO"
+            "Дорожное Радио" -> "ДР"
+            "Джем FM" -> "JAM"
+            else -> "FM"
+        }
+    }
+
+    private fun getStationLogoColor(station: String): Int {
+        return when (station) {
+            "Европа Плюс" -> Color.rgb(226, 45, 54)
+            "Радио Вера" -> Color.rgb(70, 125, 165)
+            "Коран — перевод на русский" -> Color.rgb(35, 145, 105)
+            "DFM" -> Color.rgb(235, 75, 35)
+            "Like FM" -> Color.rgb(120, 75, 190)
+            "Русское Радио" -> Color.rgb(190, 35, 45)
+            "Радио Рекорд" -> Color.rgb(35, 105, 205)
+            "ENERGY" -> Color.rgb(220, 35, 45)
+            "Авторадио" -> Color.rgb(35, 115, 185)
+            "Новое Радио" -> Color.rgb(35, 35, 40)
+            "Love Radio" -> Color.rgb(220, 55, 125)
+            "Хит FM" -> Color.rgb(235, 125, 25)
+            "Радио Maximum" -> Color.rgb(35, 35, 35)
+            "Наше Радио" -> Color.rgb(40, 100, 65)
+            "Relax FM" -> Color.rgb(70, 145, 165)
+            "Радио Джаз" -> Color.rgb(95, 75, 125)
+            "Ретро FM" -> Color.rgb(185, 115, 35)
+            "Дорожное Радио" -> Color.rgb(45, 105, 75)
+            "Джем FM" -> Color.rgb(220, 65, 105)
+            else -> accentColor
         }
     }
 
     private fun getStationIconColor(station: String): Int {
-        return when (station) {
-            "Радио Вера" -> Color.rgb(120, 195, 255)
-            "Коран — перевод на русский" -> Color.rgb(76, 222, 164)
-            else -> accentColor
-        }
+        return Color.WHITE
     }
 
     private fun getStationDescription(station: String): String {
@@ -817,6 +920,19 @@ class MainActivity : Activity() {
             "Русское Радио" -> "Русская музыка"
             "Like FM" -> "Современные хиты"
             "DFM" -> "Танцевальная музыка"
+            "Радио Рекорд" -> "Танцевальная музыка"
+            "ENERGY" -> "Хиты и новинки"
+            "Авторадио" -> "Популярная музыка"
+            "Новое Радио" -> "Современная музыка"
+            "Love Radio" -> "Музыка о любви"
+            "Хит FM" -> "Зарубежные хиты"
+            "Радио Maximum" -> "Рок и альтернативная музыка"
+            "Наше Радио" -> "Русский рок"
+            "Relax FM" -> "Спокойная музыка"
+            "Радио Джаз" -> "Джазовая музыка"
+            "Ретро FM" -> "Любимые хиты прошлых лет"
+            "Дорожное Радио" -> "Музыка в дороге"
+            "Джем FM" -> "Музыка Екатеринбурга"
             else -> "Прямой эфир"
         }
     }
@@ -891,7 +1007,12 @@ class MainActivity : Activity() {
         stationTitle.text = station
         stationSubtitle.text = getStationDescription(station)
         stationIcon.text = getStationIcon(station)
-        stationIcon.setTextColor(getStationIconColor(station))
+        stationIcon.textSize = logoTextSize(station)
+        stationIcon.setTextColor(Color.WHITE)
+        stationIcon.background = roundedBackground(
+            getStationLogoColor(station),
+            12
+        )
     }
 
     private fun updatePlayButton() {
@@ -1212,7 +1333,7 @@ class MainActivity : Activity() {
                     )
 
                     val params = bar.layoutParams
-                    params.height = dp((8 + wave * 30).toInt())
+                    params.height = dp((3 + wave * 9).toInt())
                     bar.layoutParams = params
                 }
             }
