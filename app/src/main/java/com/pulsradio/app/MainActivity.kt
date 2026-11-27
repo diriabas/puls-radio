@@ -6,7 +6,10 @@ import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.content.Intent
+import android.net.Uri
 import android.view.Gravity
+import android.view.View
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -56,10 +59,7 @@ class MainActivity : Activity() {
             "https://hls-01-regions.emgsound.ru/11_msk/96/playlist.m3u8",
 
         "Радио Вера" to
-            "https://radiovera.hostingradio.ru:8007/radiovera_128",
-
-        "Мирадио" to
-            "http://s02.radio-tochka.com:6090/radio"
+            "https://radiovera.hostingradio.ru:8007/radiovera_128"
     )
 
     private var selectedStation = 0
@@ -70,6 +70,7 @@ class MainActivity : Activity() {
     private lateinit var stationList: LinearLayout
     private lateinit var statusText: TextView
     private lateinit var scrollView: ScrollView
+    private lateinit var miradioButton: TextView
 
     private val backgroundColor = Color.rgb(30, 34, 42)
     private val panelColor = Color.rgb(43, 49, 60)
@@ -219,6 +220,24 @@ class MainActivity : Activity() {
 
         root.addView(statusText)
 
+        miradioButton = createControl("МИРАДИО — СЛУШАТЬ НА САЙТЕ").apply {
+            textSize = 14f
+            visibility = View.GONE
+            setOnClickListener {
+                openMiradioWebsite()
+            }
+        }
+
+        root.addView(
+            miradioButton,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(48)
+            ).apply {
+                bottomMargin = dp(8)
+            }
+        )
+
         val listTitle = TextView(this).apply {
             text = "РАДИОСТАНЦИИ"
             textSize = 16f
@@ -278,10 +297,18 @@ class MainActivity : Activity() {
 
         updatePlayerTitle()
         updateStationList()
+        updateMiradioButton()
     }
 
     private fun togglePlayback() {
-        val currentUrl = stationUrls[stations[selectedStation]]
+        val station = stations[selectedStation]
+
+        if (station == "Мирадио") {
+            showStatus("Для Мирадио нажмите кнопку «Слушать на сайте»")
+            return
+        }
+
+        val currentUrl = stationUrls[station]
 
         if (currentUrl == null) {
             showStatus("Эта станция пока не подключена")
@@ -300,7 +327,7 @@ class MainActivity : Activity() {
                 currentPlayer.pause()
                 showStatus("Пауза")
             } else {
-                showStatus("Запуск: ${stations[selectedStation]}...")
+                showStatus("Запуск: $station...")
 
                 if (currentPlayer.playbackState == Player.STATE_IDLE) {
                     currentPlayer.setMediaItem(
@@ -319,6 +346,29 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun openMiradioWebsite() {
+        try {
+            val intent = Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://miradio.ru")
+            )
+
+            startActivity(intent)
+            showStatus("Открываем официальный сайт Мирадио")
+
+        } catch (error: Throwable) {
+            showStatus("Не удалось открыть сайт Мирадио")
+
+            Toast.makeText(
+                this,
+                "Не удалось открыть браузер",
+                Toast.LENGTH_LONG
+            ).show()
+
+            Log.e("PulsRadio", "Ошибка открытия Мирадио", error)
+        }
+    }
+
     private fun selectStation(index: Int) {
         selectedStation = index
 
@@ -332,6 +382,7 @@ class MainActivity : Activity() {
         updatePlayerTitle()
         updateStationList()
         updatePlayButton()
+        updateMiradioButton()
 
         showStatus("Выбрана станция: ${stations[index]}")
 
@@ -340,6 +391,17 @@ class MainActivity : Activity() {
                 0,
                 stationList.getChildAt(index).top
             )
+        }
+    }
+
+    private fun updateMiradioButton() {
+        if (::miradioButton.isInitialized) {
+            miradioButton.visibility =
+                if (stations[selectedStation] == "Мирадио") {
+                    View.VISIBLE
+                } else {
+                    View.GONE
+                }
         }
     }
 
