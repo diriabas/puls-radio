@@ -29,11 +29,28 @@ jobs:
         with:
           gradle-version: 8.9
 
-      - name: Check Gradle
-        run: gradle --version
+      - name: Validate AndroidManifest XML
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          path = Path("app/src/main/AndroidManifest.xml")
+          data = path.read_bytes()
+
+          print("File:", path)
+          print("First bytes:", repr(data[:20]))
+
+          try:
+              ET.fromstring(data)
+              print("MANIFEST XML: OK")
+          except ET.ParseError as error:
+              print("MANIFEST XML ERROR:", error)
+              raise
+          PY
 
       - name: Build APK
-        run: gradle assembleDebug --stacktrace --info
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload APK
         if: success()
