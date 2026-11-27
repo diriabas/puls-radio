@@ -131,8 +131,7 @@ class MainActivity : Activity() {
     private lateinit var statusText: TextView
     private lateinit var playerCard: LinearLayout
     private lateinit var miniPlayer: LinearLayout
-    private lateinit var radioTab: TextView
-    private lateinit var settingsTab: TextView
+    private lateinit var settingsButton: TextView
 
     private val stationCards = mutableListOf<LinearLayout>()
     private val visualizerBars = mutableListOf<View>()
@@ -236,7 +235,7 @@ class MainActivity : Activity() {
 
         animationEnabled = prefs.getBoolean("animation", true)
         autoStartEnabled = prefs.getBoolean("auto_start", false)
-        stationTilesEnabled = prefs.getBoolean("station_tiles", false)
+        stationTilesEnabled = true
         selectedTheme = prefs.getString("theme", "blue") ?: "blue"
         applyThemeColors()
 
@@ -256,123 +255,81 @@ class MainActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(backgroundColor)
+            clipChildren = true
+            clipToPadding = true
         }
 
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(18), dp(8), dp(18), dp(8))
+            setPadding(dp(16), dp(8), dp(16), dp(10))
         }
 
         val logo = TextView(this).apply {
-            text = "〰"
-            textSize = 34f
+            text = "◉"
+            textSize = 31f
             setTextColor(accentColor)
             gravity = Gravity.CENTER
+            setTypeface(null, Typeface.BOLD)
         }
+        header.addView(logo, LinearLayout.LayoutParams(dp(46), dp(48)))
 
+        val titleColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
         val appName = TextView(this).apply {
             text = "ПУЛЬС РАДИО"
-            textSize = 23f
+            textSize = 25f
             setTextColor(textColor)
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER_VERTICAL
-            letterSpacing = 0.06f
+            setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD), Typeface.BOLD)
+            letterSpacing = 0.11f
+            setShadowLayer(dp(4).toFloat(), 0f, dp(2).toFloat(), accentColor)
         }
+        val accentLine = View(this).apply {
+            background = roundedBackground(accentColor, 5)
+        }
+        titleColumn.addView(appName)
+        titleColumn.addView(accentLine, LinearLayout.LayoutParams(dp(82), dp(3)).apply {
+            topMargin = dp(3)
+        })
+        header.addView(titleColumn, LinearLayout.LayoutParams(0, dp(48), 1f))
 
-        header.addView(
-            logo,
-            LinearLayout.LayoutParams(dp(48), dp(48))
-        )
-
-        header.addView(
-            appName,
-            LinearLayout.LayoutParams(0, dp(48), 1f)
-        )
-
+        settingsButton = TextView(this).apply {
+            text = "⚙"
+            textSize = 23f
+            setTextColor(accentColor)
+            gravity = Gravity.CENTER
+            background = roundedBackground(panelColor, 16)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { showTab(if (currentTab == 0) 1 else 0) }
+        }
+        header.addView(settingsButton, LinearLayout.LayoutParams(dp(46), dp(46)))
         root.addView(header)
 
         contentFrame = FrameLayout(this)
-
-        root.addView(
-            contentFrame,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            )
-        )
+        root.addView(contentFrame, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
 
         miniPlayer = createMiniPlayer()
-        root.addView(
-            miniPlayer,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                leftMargin = dp(10)
-                rightMargin = dp(10)
-                topMargin = dp(5)
-                bottomMargin = dp(5)
-            }
-        )
-
-        val bottomBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(dp(12), dp(5), dp(12), dp(5))
-            background = roundedBackground(
-                Color.rgb(12, 26, 42),
-                22
-            )
-        }
-
-        radioTab = createTabButton("◉", "РАДИО")
-        settingsTab = createTabButton("⚙", "НАСТРОЙКИ")
-
-        radioTab.setOnClickListener {
-            showTab(0)
-        }
-
-        settingsTab.setOnClickListener {
-            showTab(1)
-        }
-
-        bottomBar.addView(
-            radioTab,
-            LinearLayout.LayoutParams(0, dp(60), 1f)
-        )
-
-        bottomBar.addView(
-            settingsTab,
-            LinearLayout.LayoutParams(0, dp(60), 1f)
-        )
-
-        root.addView(
-            bottomBar,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(70)
-            ).apply {
-                leftMargin = dp(22)
-                rightMargin = dp(22)
-                bottomMargin = dp(3)
-            }
-        )
+        root.addView(miniPlayer, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            leftMargin = dp(12)
+            rightMargin = dp(12)
+            topMargin = dp(5)
+            bottomMargin = dp(7)
+        })
 
         setContentView(root)
-
-        // Учитываем системные панели Android.
-        // Нижнее меню будет находиться выше панели навигации телефона.
         root.setOnApplyWindowInsetsListener { view, insets ->
-
             val topInset: Int
             val bottomInset: Int
-
             if (Build.VERSION.SDK_INT >= 30) {
-                val bars = insets.getInsets(
-                    WindowInsets.Type.systemBars()
-                )
+                val bars = insets.getInsets(WindowInsets.Type.systemBars())
                 topInset = bars.top
                 bottomInset = bars.bottom
             } else {
@@ -382,155 +339,67 @@ class MainActivity : Activity() {
                     bottomInset = insets.systemWindowInsetBottom
                 }
             }
-
-            view.setPadding(
-                0,
-                topInset,
-                0,
-                bottomInset
-            )
-
+            view.setPadding(0, topInset, 0, bottomInset)
             insets
         }
-
         root.requestApplyInsets()
-    }
-
-    private fun createTabButton(
-        symbol: String,
-        label: String
-    ): TextView {
-        return TextView(this).apply {
-            text = "$symbol\n$label"
-            textSize = 12f
-            setTextColor(secondaryColor)
-            gravity = Gravity.CENTER
-            setTypeface(null, Typeface.BOLD)
-            isClickable = true
-            isFocusable = true
-        }
     }
 
     private fun showTab(tab: Int) {
         currentTab = tab
         stopAnimations()
-
         contentFrame.removeAllViews()
         miniPlayer.visibility = if (tab == 0) View.VISIBLE else View.GONE
+        settingsButton.text = if (tab == 0) "⚙" else "←"
+        settingsButton.contentDescription = if (tab == 0) "Открыть параметры" else "Вернуться к радио"
 
         if (tab == 0) {
             contentFrame.addView(createRadioScreen())
             updatePlayerInformation()
             updateStationCards()
             updatePlayButton()
-
-            if (player?.isPlaying == true && animationEnabled) {
-                startAnimations()
-            }
+            if (player?.isPlaying == true && animationEnabled) startAnimations()
         } else {
             contentFrame.addView(createSettingsScreen())
         }
-
-        radioTab.setTextColor(
-            if (tab == 0) accentColor else secondaryColor
-        )
-
-        settingsTab.setTextColor(
-            if (tab == 1) accentColor else secondaryColor
-        )
     }
 
     private fun createRadioScreen(): View {
         stationCards.clear()
-
         val scroll = ScrollView(this).apply {
-            clipToPadding = false
+            clipToPadding = true
+            setPadding(0, 0, 0, dp(4))
         }
-
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(10), dp(16), dp(16))
+            setPadding(dp(13), dp(5), dp(13), dp(12))
         }
 
-        val titleRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-
-        val listTitle = TextView(this).apply {
-            text = "РАДИОСТАНЦИИ"
-            textSize = 16f
-            setTextColor(textColor)
-            setTypeface(null, Typeface.BOLD)
-        }
-
-        val count = TextView(this).apply {
-            text = "${stations.size} станций"
-            textSize = 12f
-            setTextColor(secondaryColor)
-            gravity = Gravity.CENTER
-            background = roundedBackground(panelColor, 25)
-            setPadding(dp(12), dp(7), dp(12), dp(7))
-        }
-
-        titleRow.addView(
-            listTitle,
-            LinearLayout.LayoutParams(0, dp(40), 1f)
-        )
-        titleRow.addView(count)
-        container.addView(titleRow)
-
-        if (stationTilesEnabled) {
-            var index = 0
-            while (index < stations.size) {
-                val row = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                }
-
-                for (column in 0 until 3) {
-                    val stationIndex = index + column
-                    val tileParams = LinearLayout.LayoutParams(0, dp(116), 1f).apply {
-                        if (column > 0) marginStart = dp(4)
-                        if (column < 2) marginEnd = dp(4)
-                    }
-
-                    if (stationIndex < stations.size) {
-                        val tile = createStationTile(stationIndex, stations[stationIndex])
-                        stationCards.add(tile)
-                        row.addView(tile, tileParams)
-                    } else {
-                        row.addView(View(this), tileParams)
-                    }
-                }
-
-                container.addView(
-                    row,
-                    LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        dp(116)
-                    ).apply {
-                        bottomMargin = dp(8)
-                    }
-                )
-                index += 3
+        var index = 0
+        while (index < stations.size) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
             }
-        } else {
-            stations.forEachIndexed { index, station ->
-                val card = createStationCard(index, station)
-                stationCards.add(card)
-                container.addView(
-                    card,
-                    LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        dp(76)
-                    ).apply {
-                        bottomMargin = dp(8)
-                    }
-                )
+            for (column in 0 until 3) {
+                val stationIndex = index + column
+                val params = LinearLayout.LayoutParams(0, dp(126), 1f).apply {
+                    if (column > 0) marginStart = dp(4)
+                    if (column < 2) marginEnd = dp(4)
+                }
+                if (stationIndex < stations.size) {
+                    val tile = createStationTile(stationIndex, stations[stationIndex])
+                    stationCards.add(tile)
+                    row.addView(tile, params)
+                } else {
+                    row.addView(View(this), params)
+                }
             }
+            container.addView(row, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(126)
+            ).apply { bottomMargin = dp(8) })
+            index += 3
         }
-
         scroll.addView(container)
         return scroll
     }
@@ -538,12 +407,15 @@ class MainActivity : Activity() {
     private fun createMiniPlayer(): LinearLayout {
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            clipChildren = true
+            clipToPadding = true
             background = playerBackground(
                 Color.rgb(8, 48, 77),
                 Color.rgb(5, 19, 38)
             )
-            setPadding(0, dp(4), 0, dp(3))
+            setPadding(dp(10), dp(4), dp(10), dp(4))
         }
+        if (Build.VERSION.SDK_INT >= 21) panel.clipToOutline = true
 
         playerCard = panel
 
@@ -647,6 +519,8 @@ class MainActivity : Activity() {
         val equalizer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
+            clipChildren = true
+            clipToPadding = true
         }
 
         visualizerBars.clear()
@@ -783,7 +657,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             background = stationBackground(index == selectedStation)
-            setPadding(dp(4), dp(5), dp(4), dp(4))
+            setPadding(dp(4), dp(7), dp(4), dp(5))
             isClickable = true
             isFocusable = true
             setOnClickListener {
@@ -801,15 +675,15 @@ class MainActivity : Activity() {
 
         tile.addView(
             icon,
-            LinearLayout.LayoutParams(dp(42), dp(36)).apply {
+            LinearLayout.LayoutParams(dp(44), dp(40)).apply {
                 gravity = Gravity.CENTER
-                bottomMargin = dp(3)
+                bottomMargin = dp(5)
             }
         )
 
         val name = TextView(this).apply {
             text = station
-            textSize = 11f
+            textSize = 10.5f
             setTextColor(textColor)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
@@ -819,13 +693,13 @@ class MainActivity : Activity() {
             name,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(36)
+                dp(34)
             )
         )
 
         val description = TextView(this).apply {
             text = getStationDescription(station)
-            textSize = 8f
+            textSize = 7.5f
             setTextColor(secondaryColor)
             gravity = Gravity.CENTER
             maxLines = 1
@@ -1108,131 +982,129 @@ class MainActivity : Activity() {
 
     private fun createSettingsScreen(): View {
         val scroll = ScrollView(this)
-
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(12), dp(18), dp(24))
+            setPadding(dp(13), dp(8), dp(13), dp(20))
         }
-
-        val title = TextView(this).apply {
-            text = "НАСТРОЙКИ"
-            textSize = 23f
-            setTextColor(textColor)
-            setTypeface(null, Typeface.BOLD)
-            setPadding(0, 0, 0, dp(8))
-        }
-
-        val subtitle = TextView(this).apply {
-            text = "Настрой приложение под себя"
-            textSize = 13f
-            setTextColor(secondaryColor)
-            setPadding(0, 0, 0, dp(20))
-        }
-
-        container.addView(title)
-        container.addView(subtitle)
-        container.addView(sectionTitle("ВНЕШНИЙ ВИД"))
-
-        container.addView(
-            createSwitchSetting(
-                "Плавная анимация",
-                "Переливы карточки и визуализатор",
-                animationEnabled
-            ) { enabled ->
-                animationEnabled = enabled
-
-                prefs.edit()
-                    .putBoolean("animation", enabled)
-                    .apply()
-
-                if (currentTab == 0) {
-                    if (enabled && player?.isPlaying == true) {
-                        startAnimations()
-                    } else {
-                        stopAnimations()
-                    }
+        val gridItems = listOf(
+            Triple("Анимация", "Плавные эффекты", "animation"),
+            Triple("Тема", getThemeDisplayName(), "theme"),
+            Triple("Автозапуск", "Последняя станция", "autostart"),
+            Triple("Станция", stations[selectedStation], "last"),
+            Triple("О приложении", "Пульс Радио · 1.0", "about")
+        )
+        var index = 0
+        while (index < gridItems.size) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            for (column in 0 until 3) {
+                val itemIndex = index + column
+                val params = LinearLayout.LayoutParams(0, dp(126), 1f).apply {
+                    if (column > 0) marginStart = dp(4)
+                    if (column < 2) marginEnd = dp(4)
+                }
+                if (itemIndex < gridItems.size) {
+                    val item = gridItems[itemIndex]
+                    row.addView(createSettingsTile(item.first, item.second, item.third), params)
+                } else {
+                    row.addView(View(this), params)
                 }
             }
-        )
-
-        val themeSetting = createInfoSetting(
-            "Тема приложения",
-            getThemeDisplayName(),
-            "◈"
-        ).apply {
-            isClickable = true
-            isFocusable = true
-            setOnClickListener {
-                showThemeDialog()
-            }
+            container.addView(row, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(126)
+            ).apply { bottomMargin = dp(8) })
+            index += 3
         }
-        container.addView(themeSetting)
+        scroll.addView(container)
+        return scroll
+    }
 
-        container.addView(
-            createSwitchSetting(
-                "Плиточное отображение станций",
-                "Показывать радиостанции в три колонки",
-                stationTilesEnabled
-            ) { enabled ->
-                stationTilesEnabled = enabled
-                prefs.edit()
-                    .putBoolean("station_tiles", enabled)
-                    .apply()
-
-                Toast.makeText(
-                    this,
-                    if (enabled) "Включён режим плиток" else "Включён список станций",
-                    Toast.LENGTH_SHORT
-                ).show()
+    private fun createSettingsTile(title: String, subtitle: String, type: String): LinearLayout {
+        val tile = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = stationBackground(false)
+            setPadding(dp(5), dp(5), dp(5), dp(4))
+            isClickable = type == "theme" || type == "last" || type == "about"
+            isFocusable = true
+        }
+        val symbol = TextView(this).apply {
+            text = when (type) {
+                "animation" -> "✧"
+                "theme" -> "◈"
+                "autostart" -> "▶"
+                "last" -> "◉"
+                else -> "ⓘ"
             }
-        )
-
-        container.addView(sectionTitle("ВОСПРОИЗВЕДЕНИЕ"))
-
-        container.addView(
-            createSwitchSetting(
-                "Автозапуск последней станции",
-                "Запускать радио при открытии приложения",
-                autoStartEnabled
-            ) { enabled ->
-                autoStartEnabled = enabled
-
-                prefs.edit()
-                    .putBoolean("auto_start", enabled)
-                    .apply()
-            }
-        )
-
-        container.addView(
-            createInfoSetting(
-                "Последняя станция",
-                stations[selectedStation],
-                "◉"
-            )
-        )
-
-        container.addView(sectionTitle("О ПРИЛОЖЕНИИ"))
-
-        container.addView(
-            createInfoSetting(
-                "Пульс Радио",
-                "Версия приложения 1.0",
-                "〰"
-            )
-        )
-
-        val footer = TextView(this).apply {
-            text = "Пульс Радио\nТвоя музыка и любимые эфиры"
-            textSize = 12f
+            textSize = 23f
+            setTextColor(accentColor)
+            gravity = Gravity.CENTER
+        }
+        tile.addView(symbol, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(28)
+        ))
+        val titleView = TextView(this).apply {
+            text = title
+            textSize = 11f
+            setTextColor(textColor)
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            maxLines = 2
+        }
+        tile.addView(titleView, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(29)
+        ))
+        val detailView = TextView(this).apply {
+            text = subtitle
+            textSize = 8f
             setTextColor(secondaryColor)
             gravity = Gravity.CENTER
-            setPadding(0, dp(28), 0, dp(10))
+            maxLines = 2
         }
+        tile.addView(detailView, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(23)
+        ))
 
-        container.addView(footer)
-        scroll.addView(container)
-
-        return scroll
+        when (type) {
+            "animation" -> {
+                val toggle = Switch(this).apply {
+                    isChecked = animationEnabled
+                    scaleX = 0.78f
+                    scaleY = 0.78f
+                    setOnCheckedChangeListener { _, enabled ->
+                        animationEnabled = enabled
+                        prefs.edit().putBoolean("animation", enabled).apply()
+                        if (enabled && player?.isPlaying == true && currentTab == 0) startAnimations()
+                        else stopAnimations()
+                    }
+                }
+                tile.addView(toggle, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, dp(25)
+                ).apply { gravity = Gravity.CENTER })
+            }
+            "autostart" -> {
+                val toggle = Switch(this).apply {
+                    isChecked = autoStartEnabled
+                    scaleX = 0.78f
+                    scaleY = 0.78f
+                    setOnCheckedChangeListener { _, enabled ->
+                        autoStartEnabled = enabled
+                        prefs.edit().putBoolean("auto_start", enabled).apply()
+                    }
+                }
+                tile.addView(toggle, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, dp(25)
+                ).apply { gravity = Gravity.CENTER })
+            }
+            "theme" -> tile.setOnClickListener { showThemeDialog() }
+            "last" -> tile.setOnClickListener { showTab(0) }
+            "about" -> tile.setOnClickListener {
+                Toast.makeText(this, "Пульс Радио · версия 1.0", Toast.LENGTH_SHORT).show()
+            }
+        }
+        return tile
     }
 
     private fun getThemeDisplayName(): String {
