@@ -5,6 +5,9 @@ import android.os.Bundle
 import android.graphics.Color
 import android.view.Gravity
 import android.widget.*
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.appcompat.app.AppCompatActivity
 
 data class Station(
@@ -14,7 +17,8 @@ data class Station(
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var player: RadioPlayer
+    private var player: RadioPlayer? = null
+
     private lateinit var stationTitle: TextView
     private lateinit var statusText: TextView
 
@@ -48,10 +52,26 @@ class MainActivity : AppCompatActivity() {
     )
 
     private val themes = mapOf(
-        "Серая" to intArrayOf(0xFF454A50.toInt(), 0xFF60666E.toInt(), Color.WHITE),
-        "Светло-серая" to intArrayOf(0xFFE7E9ED.toInt(), Color.WHITE, 0xFF30343A.toInt()),
-        "Синяя" to intArrayOf(0xFF174A91.toInt(), 0xFF2865B2.toInt(), Color.WHITE),
-        "Светло-синяя" to intArrayOf(0xFFDCEEFF.toInt(), Color.WHITE, 0xFF174A91.toInt())
+        "Серая" to intArrayOf(
+            0xFF454A50.toInt(),
+            0xFF60666E.toInt(),
+            Color.WHITE
+        ),
+        "Светло-серая" to intArrayOf(
+            0xFFE7E9ED.toInt(),
+            Color.WHITE,
+            0xFF30343A.toInt()
+        ),
+        "Синяя" to intArrayOf(
+            0xFF174A91.toInt(),
+            0xFF2865B2.toInt(),
+            Color.WHITE
+        ),
+        "Светло-синяя" to intArrayOf(
+            0xFFDCEEFF.toInt(),
+            Color.WHITE,
+            0xFF174A91.toInt()
+        )
     )
 
     private var currentTheme = "Серая"
@@ -59,16 +79,35 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        player = RadioPlayer(this)
+        val crashReport = CrashLogger.read(this)
 
-        currentTheme = getSharedPreferences("puls_radio", MODE_PRIVATE)
-            .getString("theme", "Серая") ?: "Серая"
+        if (crashReport != null) {
+            showCrashReport(crashReport)
+            return
+        }
 
-        createInterface()
+        try {
+            currentTheme = getSharedPreferences(
+                "puls_radio",
+                MODE_PRIVATE
+            ).getString("theme", "Серая") ?: "Серая"
+
+            if (!themes.containsKey(currentTheme)) {
+                currentTheme = "Серая"
+            }
+
+            player = RadioPlayer(this)
+            createInterface()
+
+        } catch (error: Exception) {
+            showCrashReport(
+                "Ошибка запуска:\n${error.stackTraceToString()}"
+            )
+        }
     }
 
     private fun createInterface() {
-        val colors = themes[currentTheme]!!
+        val colors = themes[currentTheme] ?: themes["Серая"]!!
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -120,31 +159,14 @@ class MainActivity : AppCompatActivity() {
         val playButton = Button(this).apply {
             text = "▶ PLAY"
             setOnClickListener {
-                val selected = stations.firstOrNull {
-                    it.name == stationTitle.text
-                }
-
-                if (selected?.url != null) {
-                    try {
-                        player.play(selected.url)
-                        statusText.text = "Подключение..."
-                    } catch (e: Exception) {
-                        statusText.text = "Ошибка запуска"
-                    }
-                } else {
-                    Toast.makeText(
-                        this@MainActivity,
-                        "Поток этой станции добавим следующим этапом",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
+                playSelectedStation()
             }
         }
 
         val pauseButton = Button(this).apply {
             text = "Ⅱ PAUSE"
             setOnClickListener {
-                player.pause()
+                player?.pause()
                 statusText.text = "Пауза"
             }
         }
@@ -155,7 +177,9 @@ class MainActivity : AppCompatActivity() {
 
         val themeButton = Button(this).apply {
             text = "ОФОРМЛЕНИЕ"
-            setOnClickListener { showThemes() }
+            setOnClickListener {
+                showThemes()
+            }
         }
 
         content.addView(themeButton)
@@ -179,12 +203,7 @@ class MainActivity : AppCompatActivity() {
                     stationTitle.text = station.name
 
                     if (station.url != null) {
-                        try {
-                            player.play(station.url)
-                            statusText.text = "Подключение..."
-                        } catch (e: Exception) {
-                            statusText.text = "Ошибка запуска"
-                        }
+                        playStation(station)
                     } else {
                         statusText.text = "Поток пока не добавлен"
                     }
@@ -194,7 +213,18 @@ class MainActivity : AppCompatActivity() {
             content.addView(button)
         }
 
+        val stopButton = Button(this).apply {
+            text = "■ ОСТАНОВИТЬ РАДИО"
+            setOnClickListener {
+                player?.stop()
+                statusText.text = "Радио остановлено"
+            }
+        }
+
+        content.addView(stopButton)
+
         scroll.addView(content)
+
         root.addView(
             scroll,
             LinearLayout.LayoutParams(
@@ -210,6 +240,35 @@ class MainActivity : AppCompatActivity() {
         window.navigationBarColor = colors[0]
     }
 
+    private fun playSelectedStation() {
+        val selected = stations.firstOrNull {
+            it.name == stationTitle.text
+        }
+
+        if (selected == null) {
+            statusText.text = "Сначала выберите радиостанцию"
+            return
+        }
+
+        playStation(selected)
+    }
+
+    private fun playStation(station: Station) {
+        val url = station.url
+
+        if (url == null) {
+            statusText.text = "Поток пока не добавлен"
+            return
+        }
+
+        try {
+            player?.play(url)
+            statusText.text = "Подключение к ${station.name}..."
+        } catch (error: Exception) {
+            statusText.text = "Ошибка запуска радио"
+        }
+    }
+
     private fun showThemes() {
         val names = themes.keys.toTypedArray()
 
@@ -218,8 +277,10 @@ class MainActivity : AppCompatActivity() {
             .setItems(names) { _, which ->
                 currentTheme = names[which]
 
-                getSharedPreferences("puls_radio", MODE_PRIVATE)
-                    .edit()
+                getSharedPreferences(
+                    "puls_radio",
+                    MODE_PRIVATE
+                ).edit()
                     .putString("theme", currentTheme)
                     .apply()
 
@@ -228,8 +289,87 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showCrashReport(report: String) {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(16, 16, 16, 16)
+            setBackgroundColor(Color.WHITE)
+        }
+
+        val title = TextView(this).apply {
+            text = "ПУЛЬС РАДИО — ДИАГНОСТИКА"
+            textSize = 21f
+            setTextColor(Color.BLACK)
+            gravity = Gravity.CENTER
+            setPadding(8, 16, 8, 16)
+        }
+
+        val message = TextView(this).apply {
+            text = report
+            textSize = 12f
+            setTextColor(Color.BLACK)
+            setTextIsSelectable(true)
+        }
+
+        val scroll = ScrollView(this)
+        scroll.addView(message)
+
+        val copyButton = Button(this).apply {
+            text = "СКОПИРОВАТЬ ОТЧЁТ"
+
+            setOnClickListener {
+                val clipboard = getSystemService(
+                    Context.CLIPBOARD_SERVICE
+                ) as ClipboardManager
+
+                clipboard.setPrimaryClip(
+                    ClipData.newPlainText(
+                        "Puls Radio Crash Report",
+                        report
+                    )
+                )
+
+                Toast.makeText(
+                    this@MainActivity,
+                    "Отчёт скопирован",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
+        val clearButton = Button(this).apply {
+            text = "УДАЛИТЬ ОТЧЁТ И ПОВТОРИТЬ"
+
+            setOnClickListener {
+                CrashLogger.clear(this@MainActivity)
+                recreate()
+            }
+        }
+
+        root.addView(title)
+
+        root.addView(
+            scroll,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        )
+
+        root.addView(copyButton)
+        root.addView(clearButton)
+
+        setContentView(root)
+    }
+
     override fun onDestroy() {
-        player.release()
+        try {
+            player?.release()
+            player = null
+        } catch (_: Exception) {
+        }
+
         super.onDestroy()
     }
 }
