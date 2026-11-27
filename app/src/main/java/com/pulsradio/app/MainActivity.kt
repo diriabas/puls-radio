@@ -152,6 +152,7 @@ class MainActivity : Activity() {
     private var activeStreamCandidateIndex = 0
     private var player: ExoPlayer? = null
     private var playbackService: RadioPlaybackService? = null
+    private var attachedPlayerListener: Player.Listener? = null
     private var serviceBound = false
     private val playbackConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -1545,8 +1546,8 @@ class MainActivity : Activity() {
 
     private fun attachPlayerListener() {
         val current = player ?: return
-        current.clearListeners()
-        current.addListener(object : Player.Listener {
+        attachedPlayerListener?.let { current.removeListener(it) }
+        val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 updatePlayButton()
                 updateStationCards()
@@ -1579,7 +1580,9 @@ class MainActivity : Activity() {
                     updateStationCards()
                 }
             }
-        })
+        }
+        attachedPlayerListener = listener
+        current.addListener(listener)
     }
 
     private fun dp(value: Int): Int {
@@ -1588,7 +1591,9 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         stopAnimations()
-        // Проигрыватель принадлежит RadioPlaybackService и переживает поворот экрана.
+        // Убираем только listener этого экрана; сам проигрыватель остаётся в сервисе.
+        attachedPlayerListener?.let { listener -> player?.removeListener(listener) }
+        attachedPlayerListener = null
         player = null
         playbackService = null
         super.onDestroy()
