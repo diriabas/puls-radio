@@ -4,15 +4,13 @@ package com.pulsradio.app
 import android.app.Activity
 import android.os.Bundle
 import android.graphics.Color
-import android.content.res.ColorStateList
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
-import android.widget.Button
+import android.view.View
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : Activity() {
 
@@ -49,41 +47,25 @@ class MainActivity : Activity() {
     private var isPlaying = false
 
     private lateinit var stationTitle: TextView
-    private lateinit var playButton: Button
+    private lateinit var playButton: TextView
     private lateinit var stationList: LinearLayout
 
     private val backgroundColor = Color.rgb(30, 34, 42)
     private val panelColor = Color.rgb(43, 49, 60)
-    private val buttonColor = Color.rgb(43, 75, 115)
-    private val accentColor = Color.rgb(55, 125, 205)
+    private val buttonColor = Color.rgb(35, 68, 108)
+    private val selectedColor = Color.rgb(55, 125, 205)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Системные панели не накладываются на содержимое приложения.
         window.statusBarColor = backgroundColor
         window.navigationBarColor = backgroundColor
-
-        WindowCompat.setDecorFitsSystemWindows(window, false)
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(backgroundColor)
-            clipToPadding = false
-        }
-
-        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
-            val bars = insets.getInsets(
-                WindowInsetsCompat.Type.systemBars()
-            )
-
-            view.setPadding(
-                dp(16) + bars.left,
-                dp(12) + bars.top,
-                dp(16) + bars.right,
-                dp(12) + bars.bottom
-            )
-
-            insets
+            setPadding(dp(16), dp(8), dp(16), dp(16))
         }
 
         val header = TextView(this).apply {
@@ -91,7 +73,7 @@ class MainActivity : Activity() {
             textSize = 25f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setPadding(0, dp(12), 0, dp(18))
+            setPadding(0, dp(10), 0, dp(18))
         }
 
         root.addView(header)
@@ -99,7 +81,7 @@ class MainActivity : Activity() {
         val playerPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(panelColor)
+            background = roundedBackground(panelColor, 12)
             setPadding(dp(12), dp(18), dp(12), dp(18))
         }
 
@@ -114,7 +96,8 @@ class MainActivity : Activity() {
             textSize = 23f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setPadding(0, dp(12), 0, dp(12))
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, dp(12), 0, dp(14))
         }
 
         val controls = LinearLayout(this).apply {
@@ -122,21 +105,40 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
 
-        val previousButton = createControlButton("НАЗАД").apply {
+        val previousButton = createControl("НАЗАД").apply {
             setOnClickListener { changeStation(-1) }
         }
 
-        playButton = createControlButton("▶").apply {
+        playButton = createControl("▶").apply {
+            textSize = 22f
             setOnClickListener { togglePlayback() }
         }
 
-        val nextButton = createControlButton("ДАЛЕЕ").apply {
+        val nextButton = createControl("ДАЛЕЕ").apply {
             setOnClickListener { changeStation(1) }
         }
 
-        controls.addView(previousButton)
-        controls.addView(playButton)
-        controls.addView(nextButton)
+        controls.addView(
+            previousButton,
+            LinearLayout.LayoutParams(0, dp(54), 1f).apply {
+                marginEnd = dp(5)
+            }
+        )
+
+        controls.addView(
+            playButton,
+            LinearLayout.LayoutParams(0, dp(54), 1f).apply {
+                marginStart = dp(3)
+                marginEnd = dp(3)
+            }
+        )
+
+        controls.addView(
+            nextButton,
+            LinearLayout.LayoutParams(0, dp(54), 1f).apply {
+                marginStart = dp(5)
+            }
+        )
 
         playerPanel.addView(nowPlaying)
         playerPanel.addView(stationTitle)
@@ -160,9 +162,9 @@ class MainActivity : Activity() {
         root.addView(listTitle)
 
         val scrollView = ScrollView(this).apply {
+            isFillViewport = false
             clipToPadding = false
-            isFillViewport = true
-            setPadding(0, 0, 0, dp(8))
+            setPadding(0, 0, 0, dp(12))
         }
 
         stationList = LinearLayout(this).apply {
@@ -170,12 +172,14 @@ class MainActivity : Activity() {
         }
 
         stations.forEachIndexed { index, station ->
-            val stationButton = Button(this).apply {
+            val stationItem = TextView(this).apply {
                 text = station
-                textSize = 15f
-                gravity = Gravity.CENTER_VERTICAL
+                textSize = 16f
                 setTextColor(Color.WHITE)
-                backgroundTintList = ColorStateList.valueOf(panelColor)
+                setTypeface(null, Typeface.BOLD)
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), 0, dp(12), 0)
+                background = roundedBackground(panelColor, 7)
 
                 setOnClickListener {
                     selectedStation = index
@@ -186,12 +190,12 @@ class MainActivity : Activity() {
             }
 
             stationList.addView(
-                stationButton,
+                stationItem,
                 LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
-                    dp(52)
+                    dp(56)
                 ).apply {
-                    bottomMargin = dp(5)
+                    bottomMargin = dp(6)
                 }
             )
         }
@@ -209,19 +213,27 @@ class MainActivity : Activity() {
 
         setContentView(root)
 
-        ViewCompat.requestApplyInsets(root)
-
         updatePlayer()
         updateStationList()
     }
 
-    private fun createControlButton(label: String): Button {
-        return Button(this).apply {
+    private fun createControl(label: String): TextView {
+        return TextView(this).apply {
             text = label
             textSize = 13f
             setTextColor(Color.WHITE)
-            backgroundTintList = ColorStateList.valueOf(buttonColor)
-            minWidth = dp(80)
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            background = roundedBackground(buttonColor, 9)
+            isClickable = true
+            isFocusable = true
+        }
+    }
+
+    private fun roundedBackground(color: Int, radius: Int): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radius).toFloat()
         }
     }
 
@@ -237,6 +249,14 @@ class MainActivity : Activity() {
         isPlaying = false
         updatePlayer()
         updateStationList()
+
+        // Показываем выбранную станцию в списке.
+        stationList.getChildAt(selectedStation)?.let {
+            (stationList.parent as? ScrollView)?.smoothScrollTo(
+                0,
+                it.top
+            )
+        }
     }
 
     private fun updatePlayer() {
@@ -246,10 +266,11 @@ class MainActivity : Activity() {
 
     private fun updateStationList() {
         for (i in 0 until stationList.childCount) {
-            val button = stationList.getChildAt(i) as? Button ?: continue
+            val item = stationList.getChildAt(i) as? TextView ?: continue
 
-            button.backgroundTintList = ColorStateList.valueOf(
-                if (i == selectedStation) accentColor else panelColor
+            item.background = roundedBackground(
+                if (i == selectedStation) selectedColor else panelColor,
+                7
             )
         }
     }
