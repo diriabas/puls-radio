@@ -11,7 +11,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-
+import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -20,43 +20,27 @@ import androidx.media3.exoplayer.ExoPlayer
 class MainActivity : Activity() {
 
     private val stations = listOf(
-        "Европа Плюс",
-        "Радио Рекорд",
-        "DFM",
-        "Радио ENERGY",
-        "Авторадио",
-        "Новое Радио",
-        "Love Radio",
-        "Русское Радио",
-        "Хит FM",
-        "Like FM",
-        "Радио Maximum",
-        "Наше Радио",
-        "Rock FM",
-        "Relax FM",
-        "Монте-Карло",
-        "Радио Джаз",
-        "Kiss FM",
-        "NRJ",
-        "Radio ONE",
-        "Мегаполис FM",
-        "Радио Маяк",
-        "Радио России",
-        "Вести FM",
-        "Комсомольская правда",
-        "Ретро FM",
-        "Дорожное радио"
+        "Европа Плюс", "Радио Рекорд", "DFM",
+        "Радио ENERGY", "Авторадио", "Новое Радио",
+        "Love Radio", "Русское Радио", "Хит FM",
+        "Like FM", "Радио Maximum", "Наше Радио",
+        "Rock FM", "Relax FM", "Монте-Карло",
+        "Радио Джаз", "Kiss FM", "NRJ",
+        "Radio ONE", "Мегаполис FM", "Радио Маяк",
+        "Радио России", "Вести FM",
+        "Комсомольская правда", "Ретро FM", "Дорожное радио"
     )
 
     private val europaPlusUrl =
         "https://hls-01-regions.emgsound.ru/11_msk/96/playlist.m3u8"
 
     private var selectedStation = 0
+    private var player: ExoPlayer? = null
 
-    private lateinit var player: ExoPlayer
     private lateinit var stationTitle: TextView
     private lateinit var playButton: TextView
     private lateinit var stationList: LinearLayout
+    private lateinit var statusText: TextView
     private lateinit var scrollView: ScrollView
 
     private val backgroundColor = Color.rgb(30, 34, 42)
@@ -70,29 +54,49 @@ class MainActivity : Activity() {
         window.statusBarColor = backgroundColor
         window.navigationBarColor = backgroundColor
 
-        player = ExoPlayer.Builder(this).build()
-
-        player.addListener(object : Player.Listener {
-
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                updatePlayButton()
-            }
-
-            override fun onPlayerError(error: PlaybackException) {
-                updatePlayButton()
-                Toast.makeText(
-                    this@MainActivity,
-                    "Не удалось подключиться к радиостанции",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        })
-
         createInterface()
+        initializePlayer()
+    }
+
+    private fun initializePlayer() {
+        try {
+            player = ExoPlayer.Builder(this).build()
+
+            player?.addListener(object : Player.Listener {
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    updatePlayButton()
+                }
+
+                override fun onPlaybackStateChanged(state: Int) {
+                    when (state) {
+                        Player.STATE_BUFFERING ->
+                            showStatus("Подключение к эфиру...")
+
+                        Player.STATE_READY ->
+                            showStatus("Поток подключён")
+
+                        Player.STATE_ENDED ->
+                            showStatus("Эфир завершён")
+
+                        Player.STATE_IDLE ->
+                            showStatus("Ожидание")
+                    }
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    reportError("Ошибка воспроизведения", error)
+                }
+            })
+
+            showStatus("Проигрыватель готов")
+
+        } catch (error: Throwable) {
+            reportError("Ошибка создания проигрывателя", error)
+        }
     }
 
     private fun createInterface() {
-
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(backgroundColor)
@@ -149,45 +153,43 @@ class MainActivity : Activity() {
             setOnClickListener { changeStation(1) }
         }
 
-        controls.addView(
-            previousButton,
+        controls.addView(previousButton,
             LinearLayout.LayoutParams(0, dp(54), 1f).apply {
                 marginEnd = dp(5)
-            }
-        )
+            })
 
-        controls.addView(
-            playButton,
+        controls.addView(playButton,
             LinearLayout.LayoutParams(0, dp(54), 1f).apply {
                 marginStart = dp(3)
                 marginEnd = dp(3)
-            }
-        )
+            })
 
-        controls.addView(
-            nextButton,
+        controls.addView(nextButton,
             LinearLayout.LayoutParams(0, dp(54), 1f).apply {
                 marginStart = dp(5)
-            }
-        )
+            })
 
         playerPanel.addView(nowPlaying)
         playerPanel.addView(stationTitle)
         playerPanel.addView(controls)
 
-        root.addView(
-            playerPanel,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
+        root.addView(playerPanel)
+
+        statusText = TextView(this).apply {
+            textSize = 13f
+            setTextColor(Color.LTGRAY)
+            gravity = Gravity.CENTER
+            setPadding(dp(5), dp(10), dp(5), dp(10))
+            text = "Подготовка..."
+        }
+
+        root.addView(statusText)
 
         val listTitle = TextView(this).apply {
             text = "РАДИОСТАНЦИИ"
             textSize = 16f
             setTextColor(Color.WHITE)
-            setPadding(0, dp(20), 0, dp(10))
+            setPadding(0, dp(12), 0, dp(10))
         }
 
         root.addView(listTitle)
@@ -202,8 +204,7 @@ class MainActivity : Activity() {
         }
 
         stations.forEachIndexed { index, station ->
-
-            val stationItem = TextView(this).apply {
+            val item = TextView(this).apply {
                 text = station
                 textSize = 16f
                 setTextColor(Color.WHITE)
@@ -217,32 +218,141 @@ class MainActivity : Activity() {
                 }
             }
 
-            stationList.addView(
-                stationItem,
+            stationList.addView(item,
                 LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     dp(56)
                 ).apply {
                     bottomMargin = dp(6)
-                }
-            )
+                })
         }
 
         scrollView.addView(stationList)
 
-        root.addView(
-            scrollView,
+        root.addView(scrollView,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 0,
                 1f
-            )
-        )
+            ))
 
         setContentView(root)
 
         updatePlayerTitle()
         updateStationList()
+    }
+
+    private fun togglePlayback() {
+        if (selectedStation != 0) {
+            showStatus("Эта станция пока не подключена")
+            return
+        }
+
+        try {
+            val currentPlayer = player
+
+            if (currentPlayer == null) {
+                showStatus("Проигрыватель не создан")
+                return
+            }
+
+            if (currentPlayer.isPlaying) {
+                currentPlayer.pause()
+                showStatus("Пауза")
+            } else {
+                showStatus("Запуск радиопотока...")
+
+                if (currentPlayer.playbackState == Player.STATE_IDLE) {
+                    currentPlayer.setMediaItem(
+                        MediaItem.fromUri(europaPlusUrl)
+                    )
+                    currentPlayer.prepare()
+                }
+
+                currentPlayer.play()
+            }
+
+            updatePlayButton()
+
+        } catch (error: Throwable) {
+            reportError("Ошибка при запуске эфира", error)
+        }
+    }
+
+    private fun selectStation(index: Int) {
+        selectedStation = index
+
+        try {
+            player?.stop()
+            player?.clearMediaItems()
+        } catch (error: Throwable) {
+            reportError("Ошибка переключения станции", error)
+        }
+
+        updatePlayerTitle()
+        updateStationList()
+        updatePlayButton()
+        showStatus("Выбрана станция: ${stations[index]}")
+
+        scrollView.post {
+            scrollView.smoothScrollTo(
+                0,
+                stationList.getChildAt(index).top
+            )
+        }
+    }
+
+    private fun changeStation(direction: Int) {
+        val newIndex =
+            (selectedStation + direction + stations.size) % stations.size
+
+        selectStation(newIndex)
+    }
+
+    private fun updatePlayerTitle() {
+        stationTitle.text = stations[selectedStation]
+    }
+
+    private fun updatePlayButton() {
+        playButton.text =
+            if (player?.isPlaying == true) "Ⅱ" else "▶"
+    }
+
+    private fun updateStationList() {
+        for (i in 0 until stationList.childCount) {
+            val item = stationList.getChildAt(i) as? TextView ?: continue
+
+            item.background = roundedBackground(
+                if (i == selectedStation) selectedColor else panelColor,
+                7
+            )
+        }
+    }
+
+    private fun showStatus(message: String) {
+        if (::statusText.isInitialized) {
+            statusText.text = message
+        }
+    }
+
+    private fun reportError(message: String, error: Throwable) {
+        val details = "$message: ${error.javaClass.simpleName}: ${error.message}"
+
+        Log.e("PulsRadio", details, error)
+        showStatus(details)
+
+        Toast.makeText(this, details, Toast.LENGTH_LONG).show()
+
+        try {
+            openFileOutput("puls-radio-error.txt", MODE_PRIVATE).use {
+                it.write(
+                    (details + "\n" + Log.getStackTraceString(error))
+                        .toByteArray()
+                )
+            }
+        } catch (_: Exception) {
+            // Ошибка записи журнала не должна закрывать приложение.
+        }
     }
 
     private fun createControl(label: String): TextView {
@@ -258,87 +368,10 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun togglePlayback() {
-
-        if (selectedStation != 0) {
-            Toast.makeText(
-                this,
-                "Эта радиостанция пока не подключена",
-                Toast.LENGTH_SHORT
-            ).show()
-            return
-        }
-
-        if (player.isPlaying) {
-            player.pause()
-        } else {
-            if (player.playbackState == Player.STATE_IDLE) {
-                player.setMediaItem(
-                    MediaItem.fromUri(europaPlusUrl)
-                )
-                player.prepare()
-            }
-
-            player.play()
-        }
-
-        updatePlayButton()
-    }
-
-    private fun selectStation(index: Int) {
-
-        selectedStation = index
-
-        player.pause()
-        player.clearMediaItems()
-
-        updatePlayerTitle()
-        updateStationList()
-        updatePlayButton()
-
-        scrollView.post {
-            scrollView.smoothScrollTo(
-                0,
-                stationList.getChildAt(index).top
-            )
-        }
-    }
-
-    private fun changeStation(direction: Int) {
-
-        val newIndex =
-            (selectedStation + direction + stations.size) % stations.size
-
-        selectStation(newIndex)
-    }
-
-    private fun updatePlayerTitle() {
-        stationTitle.text = stations[selectedStation]
-    }
-
-    private fun updatePlayButton() {
-        playButton.text = if (player.isPlaying) "Ⅱ" else "▶"
-    }
-
-    private fun updateStationList() {
-
-        for (i in 0 until stationList.childCount) {
-
-            val item = stationList.getChildAt(i) as? TextView
-                ?: continue
-
-            item.background = roundedBackground(
-                if (i == selectedStation) selectedColor else panelColor,
-                7
-            )
-        }
-    }
-
     private fun roundedBackground(
         color: Int,
         radius: Int
     ): GradientDrawable {
-
         return GradientDrawable().apply {
             setColor(color)
             cornerRadius = dp(radius).toFloat()
@@ -350,7 +383,13 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        player.release()
+        try {
+            player?.release()
+            player = null
+        } catch (error: Throwable) {
+            Log.e("PulsRadio", "Ошибка освобождения проигрывателя", error)
+        }
+
         super.onDestroy()
     }
 }
