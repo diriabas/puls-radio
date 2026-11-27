@@ -3,15 +3,17 @@ package com.pulsradio.app
 
 import android.app.Activity
 import android.os.Bundle
+import android.os.Build
+import android.view.Gravity
+import android.view.View
+import android.view.WindowInsets
+import android.widget.*
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.animation.ValueAnimator
 import android.animation.ArgbEvaluator
-import android.view.Gravity
-import android.view.View
-import android.widget.*
 import android.util.Log
 
 import androidx.media3.common.MediaItem
@@ -24,12 +26,7 @@ class MainActivity : Activity() {
     private val stations = listOf(
         "Европа Плюс",
         "Радио Вера",
-        "Коран — Абдул Басит",
-        "Коран — Мишари Аль-Афаси",
-        "Коран — Махер Аль-Муэкли",
         "Коран — перевод на русский",
-        "Коран — Мухаммад аль-Миншави",
-        "Коран — Сауд аш-Шурайм",
         "DFM",
         "Like FM",
         "Русское Радио"
@@ -42,23 +39,8 @@ class MainActivity : Activity() {
         "Радио Вера" to
             "https://radiovera.hostingradio.ru:8007/radiovera_128",
 
-        "Коран — Абдул Басит" to
-            "https://backup.qurango.net/radio/abdulbasit_abdulsamad",
-
-        "Коран — Мишари Аль-Афаси" to
-            "https://backup.qurango.net/radio/mishary_alafasi",
-
-        "Коран — Махер Аль-Муэкли" to
-            "https://backup.qurango.net/radio/maher",
-
         "Коран — перевод на русский" to
             "https://backup.qurango.net/radio/translation_quran_Russia",
-
-        "Коран — Мухаммад аль-Миншави" to
-            "https://radio.mp3islam.com/listen/minshawi/radio.mp3",
-
-        "Коран — Сауд аш-Шурайм" to
-            "https://radio.mp3islam.com/listen/alshuraim/radio.mp3",
 
         "DFM" to
             "https://dfm.hostingradio.ru/dfm96.aacp",
@@ -84,6 +66,7 @@ class MainActivity : Activity() {
     private lateinit var contentFrame: FrameLayout
     private lateinit var stationTitle: TextView
     private lateinit var stationSubtitle: TextView
+    private lateinit var stationIcon: TextView
     private lateinit var playButton: TextView
     private lateinit var statusText: TextView
     private lateinit var playerCard: LinearLayout
@@ -115,8 +98,8 @@ class MainActivity : Activity() {
         window.navigationBarColor = backgroundColor
 
         createMainLayout()
-        initializePlayer()
         showTab(0)
+        initializePlayer()
 
         if (autoStartEnabled) {
             playStation(selectedStation)
@@ -132,7 +115,7 @@ class MainActivity : Activity() {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(18), dp(12), dp(18), dp(12))
+            setPadding(dp(18), dp(8), dp(18), dp(8))
         }
 
         val logo = TextView(this).apply {
@@ -177,7 +160,7 @@ class MainActivity : Activity() {
         val bottomBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(dp(12), dp(8), dp(12), dp(10))
+            setPadding(dp(12), dp(5), dp(12), dp(5))
             background = roundedBackground(
                 Color.rgb(12, 26, 42),
                 18
@@ -197,17 +180,56 @@ class MainActivity : Activity() {
 
         bottomBar.addView(
             radioTab,
-            LinearLayout.LayoutParams(0, dp(58), 1f)
+            LinearLayout.LayoutParams(0, dp(56), 1f)
         )
 
         bottomBar.addView(
             settingsTab,
-            LinearLayout.LayoutParams(0, dp(58), 1f)
+            LinearLayout.LayoutParams(0, dp(56), 1f)
         )
 
-        root.addView(bottomBar)
+        root.addView(
+            bottomBar,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(66)
+            )
+        )
 
         setContentView(root)
+
+        // Учитываем системные панели Android.
+        // Нижнее меню будет находиться выше панели навигации телефона.
+        root.setOnApplyWindowInsetsListener { view, insets ->
+
+            val topInset: Int
+            val bottomInset: Int
+
+            if (Build.VERSION.SDK_INT >= 30) {
+                val bars = insets.getInsets(
+                    WindowInsets.Type.systemBars()
+                )
+                topInset = bars.top
+                bottomInset = bars.bottom
+            } else {
+                @Suppress("DEPRECATION")
+                run {
+                    topInset = insets.systemWindowInsetTop
+                    bottomInset = insets.systemWindowInsetBottom
+                }
+            }
+
+            view.setPadding(
+                0,
+                topInset,
+                0,
+                bottomInset
+            )
+
+            insets
+        }
+
+        root.requestApplyInsets()
     }
 
     private fun createTabButton(
@@ -270,37 +292,75 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             background = playerBackground(
-                Color.rgb(10, 39, 62),
-                Color.rgb(7, 22, 39)
+                Color.rgb(8, 48, 77),
+                Color.rgb(5, 19, 38)
             )
             setPadding(dp(18), dp(20), dp(18), dp(20))
         }
 
-        val playingLabel = TextView(this).apply {
-            text = "◉   СЕЙЧАС ИГРАЕТ"
+        val liveLabel = TextView(this).apply {
+            text = "●   ПРЯМОЙ ЭФИР"
             textSize = 12f
-            setTextColor(accentColor)
+            setTextColor(Color.rgb(85, 225, 255))
             gravity = Gravity.CENTER
-            letterSpacing = 0.12f
+            letterSpacing = 0.16f
         }
 
-        val iconCircle = TextView(this).apply {
+        playerCard.addView(liveLabel)
+
+        // Большая декоративная область с ореолом и значком станции.
+        val artwork = FrameLayout(this).apply {
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(
+                    Color.rgb(12, 69, 100),
+                    Color.rgb(9, 36, 67),
+                    Color.rgb(15, 25, 55)
+                )
+            ).apply {
+                cornerRadius = dp(90).toFloat()
+                setStroke(dp(1), Color.rgb(57, 159, 202))
+            }
+        }
+
+        val glow = View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.rgb(16, 105, 145))
+                setStroke(dp(2), Color.rgb(74, 205, 255))
+            }
+            alpha = 0.48f
+        }
+
+        artwork.addView(
+            glow,
+            FrameLayout.LayoutParams(dp(112), dp(112)).apply {
+                gravity = Gravity.CENTER
+            }
+        )
+
+        stationIcon = TextView(this).apply {
             text = getStationIcon(stations[selectedStation])
-            textSize = 37f
+            textSize = 57f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            background = roundedBackground(
-                Color.rgb(12, 55, 80),
-                100
-            )
+            typeface = Typeface.DEFAULT_BOLD
         }
 
-        playerCard.addView(playingLabel)
+        artwork.addView(
+            stationIcon,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
 
         playerCard.addView(
-            iconCircle,
-            LinearLayout.LayoutParams(dp(82), dp(82)).apply {
-                topMargin = dp(15)
+            artwork,
+            LinearLayout.LayoutParams(dp(154), dp(154)).apply {
+                gravity = Gravity.CENTER
+                topMargin = dp(17)
+                bottomMargin = dp(10)
             }
         )
 
@@ -309,7 +369,8 @@ class MainActivity : Activity() {
             setTextColor(textColor)
             gravity = Gravity.CENTER
             setTypeface(null, Typeface.BOLD)
-            setPadding(0, dp(14), 0, dp(4))
+            setPadding(0, dp(8), 0, dp(4))
+            maxLines = 2
         }
 
         stationSubtitle = TextView(this).apply {
@@ -321,10 +382,11 @@ class MainActivity : Activity() {
         playerCard.addView(stationTitle)
         playerCard.addView(stationSubtitle)
 
+        // Визуализатор
         val visualizer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(0, dp(18), 0, dp(18))
+            setPadding(0, dp(17), 0, dp(17))
         }
 
         repeat(23) {
@@ -347,7 +409,7 @@ class MainActivity : Activity() {
 
         playButton = TextView(this).apply {
             text = "▶"
-            textSize = 26f
+            textSize = 27f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             background = roundAccentBackground()
@@ -358,7 +420,7 @@ class MainActivity : Activity() {
 
         playerCard.addView(
             playButton,
-            LinearLayout.LayoutParams(dp(68), dp(68)).apply {
+            LinearLayout.LayoutParams(dp(70), dp(70)).apply {
                 gravity = Gravity.CENTER
             }
         )
@@ -395,11 +457,6 @@ class MainActivity : Activity() {
             setTypeface(null, Typeface.BOLD)
         }
 
-        titleRow.addView(
-            listTitle,
-            LinearLayout.LayoutParams(0, dp(40), 1f)
-        )
-
         val count = TextView(this).apply {
             text = "${stations.size} станций"
             textSize = 12f
@@ -408,6 +465,11 @@ class MainActivity : Activity() {
             background = roundedBackground(panelColor, 25)
             setPadding(dp(12), dp(7), dp(12), dp(7))
         }
+
+        titleRow.addView(
+            listTitle,
+            LinearLayout.LayoutParams(0, dp(40), 1f)
+        )
 
         titleRow.addView(count)
         container.addView(titleRow)
@@ -467,7 +529,7 @@ class MainActivity : Activity() {
             }
         )
 
-        val textColumn = LinearLayout(this).apply {
+        val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
         }
@@ -487,11 +549,11 @@ class MainActivity : Activity() {
             setPadding(0, dp(4), 0, 0)
         }
 
-        textColumn.addView(name)
-        textColumn.addView(description)
+        column.addView(name)
+        column.addView(description)
 
         card.addView(
-            textColumn,
+            column,
             LinearLayout.LayoutParams(0, dp(54), 1f)
         )
 
@@ -514,12 +576,7 @@ class MainActivity : Activity() {
         return when (station) {
             "Европа Плюс" -> "♫"
             "Радио Вера" -> "✧"
-            "Коран — Абдул Басит" -> "☪"
-            "Коран — Мишари Аль-Афаси" -> "☾"
-            "Коран — Махер Аль-Муэкли" -> "۞"
             "Коран — перевод на русский" -> "☪"
-            "Коран — Мухаммад аль-Миншави" -> "۞"
-            "Коран — Сауд аш-Шурайм" -> "☾"
             "DFM" -> "D"
             "Like FM" -> "L"
             "Русское Радио" -> "R"
@@ -528,25 +585,21 @@ class MainActivity : Activity() {
     }
 
     private fun getStationIconColor(station: String): Int {
-        return when {
-            station.startsWith("Коран") ->
-                Color.rgb(76, 222, 164)
-
-            station == "Радио Вера" ->
-                Color.rgb(120, 195, 255)
-
+        return when (station) {
+            "Радио Вера" -> Color.rgb(120, 195, 255)
+            "Коран — перевод на русский" -> Color.rgb(76, 222, 164)
             else -> accentColor
         }
     }
 
     private fun getStationDescription(station: String): String {
-        return when {
-            station.startsWith("Коран") -> "Чтение Корана"
-            station == "Радио Вера" -> "Духовное радио"
-            station == "Европа Плюс" -> "Популярная музыка"
-            station == "Русское Радио" -> "Русская музыка"
-            station == "Like FM" -> "Современные хиты"
-            station == "DFM" -> "Танцевальная музыка"
+        return when (station) {
+            "Коран — перевод на русский" -> "Чтение Корана"
+            "Радио Вера" -> "Духовное радио"
+            "Европа Плюс" -> "Популярная музыка"
+            "Русское Радио" -> "Русская музыка"
+            "Like FM" -> "Современные хиты"
+            "DFM" -> "Танцевальная музыка"
             else -> "Прямой эфир"
         }
     }
@@ -620,6 +673,8 @@ class MainActivity : Activity() {
 
         stationTitle.text = station
         stationSubtitle.text = getStationDescription(station)
+        stationIcon.text = getStationIcon(station)
+        stationIcon.setTextColor(getStationIconColor(station))
     }
 
     private fun updatePlayButton() {
@@ -676,7 +731,6 @@ class MainActivity : Activity() {
 
         container.addView(title)
         container.addView(subtitle)
-
         container.addView(sectionTitle("ВНЕШНИЙ ВИД"))
 
         container.addView(
@@ -706,14 +760,6 @@ class MainActivity : Activity() {
                 "Тема приложения",
                 "Тёмное стекло с голубой подсветкой",
                 "◈"
-            )
-        )
-
-        container.addView(
-            createInfoSetting(
-                "Значки радиостанций",
-                "Индивидуальные значки для каждой станции",
-                "♫"
             )
         )
 
@@ -760,8 +806,8 @@ class MainActivity : Activity() {
         }
 
         container.addView(footer)
-
         scroll.addView(container)
+
         return scroll
     }
 
@@ -913,9 +959,8 @@ class MainActivity : Activity() {
                         kotlin.math.sin(phase + index * 0.55)
                     )
 
-                    val height = dp((8 + wave * 30).toInt())
                     val params = bar.layoutParams
-                    params.height = height
+                    params.height = dp((8 + wave * 30).toInt())
                     bar.layoutParams = params
                 }
             }
@@ -993,9 +1038,13 @@ class MainActivity : Activity() {
     ): GradientDrawable {
         return GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
-            intArrayOf(first, second, Color.rgb(9, 24, 43))
+            intArrayOf(
+                first,
+                second,
+                Color.rgb(9, 24, 43)
+            )
         ).apply {
-            cornerRadius = dp(24).toFloat()
+            cornerRadius = dp(25).toFloat()
             setStroke(dp(1), Color.rgb(66, 133, 171))
         }
     }
