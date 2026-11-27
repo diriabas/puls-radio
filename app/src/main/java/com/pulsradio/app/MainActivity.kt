@@ -7,10 +7,15 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
-import android.view.View
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 
 class MainActivity : Activity() {
 
@@ -43,12 +48,16 @@ class MainActivity : Activity() {
         "Дорожное радио"
     )
 
-    private var selectedStation = 0
-    private var isPlaying = false
+    private val europaPlusUrl =
+        "https://hls-01-regions.emgsound.ru/11_msk/96/playlist.m3u8"
 
+    private var selectedStation = 0
+
+    private lateinit var player: ExoPlayer
     private lateinit var stationTitle: TextView
     private lateinit var playButton: TextView
     private lateinit var stationList: LinearLayout
+    private lateinit var scrollView: ScrollView
 
     private val backgroundColor = Color.rgb(30, 34, 42)
     private val panelColor = Color.rgb(43, 49, 60)
@@ -58,9 +67,31 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Системные панели не накладываются на содержимое приложения.
         window.statusBarColor = backgroundColor
         window.navigationBarColor = backgroundColor
+
+        player = ExoPlayer.Builder(this).build()
+
+        player.addListener(object : Player.Listener {
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                updatePlayButton()
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                updatePlayButton()
+                Toast.makeText(
+                    this@MainActivity,
+                    "Не удалось подключиться к радиостанции",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        })
+
+        createInterface()
+    }
+
+    private fun createInterface() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -161,10 +192,9 @@ class MainActivity : Activity() {
 
         root.addView(listTitle)
 
-        val scrollView = ScrollView(this).apply {
-            isFillViewport = false
+        scrollView = ScrollView(this).apply {
             clipToPadding = false
-            setPadding(0, 0, 0, dp(12))
+            setPadding(0, dp(4), 0, dp(12))
         }
 
         stationList = LinearLayout(this).apply {
@@ -172,6 +202,7 @@ class MainActivity : Activity() {
         }
 
         stations.forEachIndexed { index, station ->
+
             val stationItem = TextView(this).apply {
                 text = station
                 textSize = 16f
@@ -182,10 +213,7 @@ class MainActivity : Activity() {
                 background = roundedBackground(panelColor, 7)
 
                 setOnClickListener {
-                    selectedStation = index
-                    isPlaying = false
-                    updatePlayer()
-                    updateStationList()
+                    selectStation(index)
                 }
             }
 
@@ -213,7 +241,7 @@ class MainActivity : Activity() {
 
         setContentView(root)
 
-        updatePlayer()
+        updatePlayerTitle()
         updateStationList()
     }
 
@@ -230,43 +258,74 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun roundedBackground(color: Int, radius: Int): GradientDrawable {
-        return GradientDrawable().apply {
-            setColor(color)
-            cornerRadius = dp(radius).toFloat()
-        }
-    }
-
     private fun togglePlayback() {
-        isPlaying = !isPlaying
-        updatePlayer()
+
+        if (selectedStation != 0) {
+            Toast.makeText(
+                this,
+                "Эта радиостанция пока не подключена",
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+
+        if (player.isPlaying) {
+            player.pause()
+        } else {
+            if (player.playbackState == Player.STATE_IDLE) {
+                player.setMediaItem(
+                    MediaItem.fromUri(europaPlusUrl)
+                )
+                player.prepare()
+            }
+
+            player.play()
+        }
+
+        updatePlayButton()
     }
 
-    private fun changeStation(direction: Int) {
-        selectedStation =
-            (selectedStation + direction + stations.size) % stations.size
+    private fun selectStation(index: Int) {
 
-        isPlaying = false
-        updatePlayer()
+        selectedStation = index
+
+        player.pause()
+        player.clearMediaItems()
+
+        updatePlayerTitle()
         updateStationList()
+        updatePlayButton()
 
-        // Показываем выбранную станцию в списке.
-        stationList.getChildAt(selectedStation)?.let {
-            (stationList.parent as? ScrollView)?.smoothScrollTo(
+        scrollView.post {
+            scrollView.smoothScrollTo(
                 0,
-                it.top
+                stationList.getChildAt(index).top
             )
         }
     }
 
-    private fun updatePlayer() {
+    private fun changeStation(direction: Int) {
+
+        val newIndex =
+            (selectedStation + direction + stations.size) % stations.size
+
+        selectStation(newIndex)
+    }
+
+    private fun updatePlayerTitle() {
         stationTitle.text = stations[selectedStation]
-        playButton.text = if (isPlaying) "Ⅱ" else "▶"
+    }
+
+    private fun updatePlayButton() {
+        playButton.text = if (player.isPlaying) "Ⅱ" else "▶"
     }
 
     private fun updateStationList() {
+
         for (i in 0 until stationList.childCount) {
-            val item = stationList.getChildAt(i) as? TextView ?: continue
+
+            val item = stationList.getChildAt(i) as? TextView
+                ?: continue
 
             item.background = roundedBackground(
                 if (i == selectedStation) selectedColor else panelColor,
@@ -275,7 +334,23 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun roundedBackground(
+        color: Int,
+        radius: Int
+    ): GradientDrawable {
+
+        return GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radius).toFloat()
+        }
+    }
+
     private fun dp(value: Int): Int {
         return (value * resources.displayMetrics.density).toInt()
+    }
+
+    override fun onDestroy() {
+        player.release()
+        super.onDestroy()
     }
 }
