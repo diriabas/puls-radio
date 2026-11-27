@@ -4,6 +4,7 @@ package com.pulsradio.app
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
+import android.content.res.Configuration
 import android.os.Build
 import android.view.Gravity
 import android.view.View
@@ -55,7 +56,7 @@ class MainActivity : Activity() {
             "https://hls-02-europaplus.emgsound.ru/11/playlist.m3u8",
 
         "Радио Вера" to
-            "http://radiovera.hostingradio.ru:8007/radiovera_128",
+            "https://radiovera.hostingradio.ru:8007/radiovera_128",
 
         "Коран — перевод на русский" to
             "https://backup.qurango.net/radio/translation_quran_Russia",
@@ -106,7 +107,34 @@ class MainActivity : Activity() {
             "https://dorognoe.hostingradio.ru:8000/dorognoe",
 
         "Джем FM" to
-            "https://jamfm.ru/jamfm.m3u"
+            "https://online.jamfm.ru/hls/high.m3u8"
+    )
+
+    // Резервные адреса используются автоматически, если основной поток не запускается.
+    // Для Радио Вера оставлены два протокола одного подтверждённого потока;
+    // для Love Radio — альтернативные битрейты того же регионального эфира Екатеринбурга.
+    private val stationStreamFallbacks = mapOf(
+        "Радио Вера" to listOf(
+            "https://radiovera.hostingradio.ru:8007/radiovera_128",
+            "http://radiovera.hostingradio.ru:8007/radiovera_128"
+        ),
+        "Love Radio" to listOf(
+            "http://microit.n340.com:9000/VgMv0WV17ZVx1uuo_12_love_128_reg_60967",
+            "http://microit.n340.com:9000/VgMv0WV17ZVx1uuo_12_love_64_reg_60967",
+            "http://microit.n340.com:9000/VgMv0WV17ZVx1uuo_12_love_28_reg_60967"
+        ),
+        "Европа Плюс" to listOf(
+            "https://hls-02-europaplus.emgsound.ru/11/playlist.m3u8",
+            "http://ep128.hostingradio.ru:8030/ep128"
+        ),
+        "Русское Радио" to listOf(
+            "https://rusradio.hostingradio.ru/rusradio128.mp3",
+            "https://rusradio.hostingradio.ru/rusradio96.aacp"
+        ),
+        "Новое Радио" to listOf(
+            "https://hls.newradio.ru/novoeradio-msk/playlist.m3u8",
+            "http://stream.newradio.ru/moscow.novoe.aacp"
+        )
     )
 
     private val prefs by lazy {
@@ -116,6 +144,8 @@ class MainActivity : Activity() {
     private var selectedStation = 0
     private var streamRequestId = 0
     private var currentStreamUrl: String? = null
+    private var activeStreamCandidates: List<String> = emptyList()
+    private var activeStreamCandidateIndex = 0
     private var player: ExoPlayer? = null
     private var currentTab = 0
 
@@ -147,6 +177,27 @@ class MainActivity : Activity() {
     private var accentColor = Color.rgb(0, 195, 255)
     private var textColor = Color.rgb(240, 248, 255)
     private var secondaryColor = Color.rgb(155, 190, 215)
+
+    private fun isLandscape(): Boolean =
+        resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    private fun iconScale(): Float = if (isLandscape()) 1.25f else 1f
+
+    private fun iconDp(value: Int): Int = (dp(value) * iconScale()).toInt()
+
+    private fun iconTextSize(value: Float): Float = value * iconScale()
+
+    @Suppress("DEPRECATION")
+    private fun getInstalledVersion(): String {
+        return try {
+            val info = packageManager.getPackageInfo(packageName, 0)
+            val name = info.versionName?.takeIf { it.isNotBlank() } ?: "без номера"
+            val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
+            "$name ($code)"
+        } catch (_: Exception) {
+            "не определена"
+        }
+    }
 
     private fun applyThemeColors() {
         when (selectedTheme) {
@@ -267,23 +318,23 @@ class MainActivity : Activity() {
 
         val logo = TextView(this).apply {
             text = "◉"
-            textSize = 31f
+            textSize = iconTextSize(31f)
             setTextColor(accentColor)
             gravity = Gravity.CENTER
             setTypeface(null, Typeface.BOLD)
         }
-        header.addView(logo, LinearLayout.LayoutParams(dp(46), dp(48)))
+        header.addView(logo, LinearLayout.LayoutParams(iconDp(46), iconDp(48)))
 
         val titleColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
         }
         val appName = TextView(this).apply {
-            text = "ПУЛЬС РАДИО"
-            textSize = 25f
+            text = "пульс радио"
+            textSize = 20f
             setTextColor(textColor)
             setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD), Typeface.BOLD)
-            letterSpacing = 0.11f
+            letterSpacing = 0.08f
             setShadowLayer(dp(4).toFloat(), 0f, dp(2).toFloat(), accentColor)
         }
         val accentLine = View(this).apply {
@@ -297,7 +348,7 @@ class MainActivity : Activity() {
 
         settingsButton = TextView(this).apply {
             text = "⚙"
-            textSize = 23f
+            textSize = iconTextSize(23f)
             setTextColor(accentColor)
             gravity = Gravity.CENTER
             background = roundedBackground(panelColor, 16)
@@ -305,7 +356,7 @@ class MainActivity : Activity() {
             isFocusable = true
             setOnClickListener { showTab(if (currentTab == 0) 1 else 0) }
         }
-        header.addView(settingsButton, LinearLayout.LayoutParams(dp(46), dp(46)))
+        header.addView(settingsButton, LinearLayout.LayoutParams(iconDp(46), iconDp(46)))
         root.addView(header)
 
         contentFrame = FrameLayout(this)
@@ -383,7 +434,8 @@ class MainActivity : Activity() {
             }
             for (column in 0 until 3) {
                 val stationIndex = index + column
-                val params = LinearLayout.LayoutParams(0, dp(126), 1f).apply {
+                val stationTileHeight = if (isLandscape()) dp(140) else dp(126)
+                val params = LinearLayout.LayoutParams(0, stationTileHeight, 1f).apply {
                     if (column > 0) marginStart = dp(4)
                     if (column < 2) marginEnd = dp(4)
                 }
@@ -396,7 +448,7 @@ class MainActivity : Activity() {
                 }
             }
             container.addView(row, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(126)
+                LinearLayout.LayoutParams.MATCH_PARENT, if (isLandscape()) dp(140) else dp(126)
             ).apply { bottomMargin = dp(8) })
             index += 3
         }
@@ -427,7 +479,7 @@ class MainActivity : Activity() {
 
         stationIcon = TextView(this).apply {
             text = getStationIcon(stations[selectedStation])
-            textSize = logoTextSize(stations[selectedStation])
+            textSize = iconTextSize(logoTextSize(stations[selectedStation]))
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             background = roundedBackground(
@@ -438,7 +490,7 @@ class MainActivity : Activity() {
 
         controlsRow.addView(
             stationIcon,
-            LinearLayout.LayoutParams(dp(44), dp(44)).apply {
+            LinearLayout.LayoutParams(iconDp(44), iconDp(44)).apply {
                 marginEnd = dp(9)
             }
         )
@@ -477,13 +529,13 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(0, dp(46), 1f)
         )
 
-        val previousButton = createMiniControl("⏮", 20f)
+        val previousButton = createMiniControl("⏮", iconTextSize(20f))
         previousButton.setOnClickListener {
             val previous = if (selectedStation == 0) stations.lastIndex else selectedStation - 1
             playStation(previous)
         }
 
-        playButton = createMiniControl("▶", 19f).apply {
+        playButton = createMiniControl("▶", iconTextSize(19f)).apply {
             background = roundAccentBackground()
             setTextColor(Color.WHITE)
         }
@@ -492,7 +544,7 @@ class MainActivity : Activity() {
             togglePlayback()
         }
 
-        val nextButton = createMiniControl("⏭", 20f)
+        val nextButton = createMiniControl("⏭", iconTextSize(20f))
         nextButton.setOnClickListener {
             val next = (selectedStation + 1) % stations.size
             playStation(next)
@@ -500,18 +552,18 @@ class MainActivity : Activity() {
 
         controlsRow.addView(
             previousButton,
-            LinearLayout.LayoutParams(dp(34), dp(42))
+            LinearLayout.LayoutParams(iconDp(34), iconDp(42))
         )
         controlsRow.addView(
             playButton,
-            LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+            LinearLayout.LayoutParams(iconDp(42), iconDp(42)).apply {
                 marginStart = dp(3)
                 marginEnd = dp(3)
             }
         )
         controlsRow.addView(
             nextButton,
-            LinearLayout.LayoutParams(dp(34), dp(42))
+            LinearLayout.LayoutParams(iconDp(34), iconDp(42))
         )
 
         panel.addView(controlsRow)
@@ -667,7 +719,7 @@ class MainActivity : Activity() {
 
         val icon = TextView(this).apply {
             text = getStationIcon(station)
-            textSize = logoTextSize(station)
+            textSize = iconTextSize(logoTextSize(station))
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             background = roundedBackground(getStationLogoColor(station), 15)
@@ -675,7 +727,7 @@ class MainActivity : Activity() {
 
         tile.addView(
             icon,
-            LinearLayout.LayoutParams(dp(44), dp(40)).apply {
+            LinearLayout.LayoutParams(iconDp(44), iconDp(40)).apply {
                 gravity = Gravity.CENTER
                 bottomMargin = dp(5)
             }
@@ -714,7 +766,7 @@ class MainActivity : Activity() {
 
         val indicator = TextView(this).apply {
             text = if (index == selectedStation && player?.isPlaying == true) "♫" else "›"
-            textSize = 15f
+            textSize = iconTextSize(15f)
             setTextColor(if (index == selectedStation) accentColor else secondaryColor)
             gravity = Gravity.CENTER
         }
@@ -810,7 +862,13 @@ class MainActivity : Activity() {
 
     private fun selectStation(index: Int) {
         if (index == selectedStation) {
-            togglePlayback()
+            val state = player?.playbackState
+            if (state == Player.STATE_IDLE || state == Player.STATE_ENDED) {
+                // Повторное нажатие после ошибки запускает станцию заново с основного адреса.
+                playStation(index)
+            } else {
+                togglePlayback()
+            }
         } else {
             playStation(index)
         }
@@ -829,6 +887,9 @@ class MainActivity : Activity() {
             return
         }
 
+        activeStreamCandidates = stationStreamFallbacks[station] ?: listOf(url)
+        activeStreamCandidateIndex = 0
+
         selectedStation = index
         prefs.edit()
             .putInt("last_station", index)
@@ -841,13 +902,14 @@ class MainActivity : Activity() {
         val requestId = ++streamRequestId
         showStatus("Подключение: $station")
 
-        if (url.endsWith(".m3u", ignoreCase = true) &&
-            !url.endsWith(".m3u8", ignoreCase = true)
+        val firstCandidate = activeStreamCandidates.firstOrNull() ?: url
+        if (firstCandidate.endsWith(".m3u", ignoreCase = true) &&
+            !firstCandidate.endsWith(".m3u8", ignoreCase = true)
         ) {
             Thread {
                 var connection: HttpURLConnection? = null
                 try {
-                    connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                    connection = (URL(firstCandidate).openConnection() as HttpURLConnection).apply {
                         connectTimeout = 10000
                         readTimeout = 10000
                         instanceFollowRedirects = true
@@ -885,7 +947,7 @@ class MainActivity : Activity() {
                 }
             }.start()
         } else {
-            startStationPlayback(currentPlayer, url, station)
+            startStationPlayback(currentPlayer, firstCandidate, station)
         }
     }
 
@@ -942,7 +1004,7 @@ class MainActivity : Activity() {
         stationTitle.text = station
         stationSubtitle.text = getStationDescription(station)
         stationIcon.text = getStationIcon(station)
-        stationIcon.textSize = logoTextSize(station)
+        stationIcon.textSize = iconTextSize(logoTextSize(station))
         stationIcon.setTextColor(Color.WHITE)
         stationIcon.background = roundedBackground(
             getStationLogoColor(station),
@@ -991,7 +1053,7 @@ class MainActivity : Activity() {
             Triple("Тема", getThemeDisplayName(), "theme"),
             Triple("Автозапуск", "Последняя станция", "autostart"),
             Triple("Станция", stations[selectedStation], "last"),
-            Triple("О приложении", "Пульс Радио · 1.0", "about")
+            Triple("Версия приложения", getInstalledVersion(), "about")
         )
         var index = 0
         while (index < gridItems.size) {
@@ -1001,7 +1063,8 @@ class MainActivity : Activity() {
             }
             for (column in 0 until 3) {
                 val itemIndex = index + column
-                val params = LinearLayout.LayoutParams(0, dp(126), 1f).apply {
+                val settingsTileHeight = if (isLandscape()) dp(142) else dp(126)
+                val params = LinearLayout.LayoutParams(0, settingsTileHeight, 1f).apply {
                     if (column > 0) marginStart = dp(4)
                     if (column < 2) marginEnd = dp(4)
                 }
@@ -1013,7 +1076,7 @@ class MainActivity : Activity() {
                 }
             }
             container.addView(row, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(126)
+                LinearLayout.LayoutParams.MATCH_PARENT, if (isLandscape()) dp(142) else dp(126)
             ).apply { bottomMargin = dp(8) })
             index += 3
         }
@@ -1038,16 +1101,16 @@ class MainActivity : Activity() {
                 "last" -> "◉"
                 else -> "ⓘ"
             }
-            textSize = 23f
+            textSize = iconTextSize(23f)
             setTextColor(accentColor)
             gravity = Gravity.CENTER
         }
         tile.addView(symbol, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(28)
+            LinearLayout.LayoutParams.MATCH_PARENT, iconDp(28)
         ))
         val titleView = TextView(this).apply {
             text = title
-            textSize = 11f
+            textSize = if (isLandscape()) 12f else 11f
             setTextColor(textColor)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
@@ -1058,7 +1121,7 @@ class MainActivity : Activity() {
         ))
         val detailView = TextView(this).apply {
             text = subtitle
-            textSize = 8f
+            textSize = if (isLandscape()) 9f else 8f
             setTextColor(secondaryColor)
             gravity = Gravity.CENTER
             maxLines = 2
@@ -1071,8 +1134,8 @@ class MainActivity : Activity() {
             "animation" -> {
                 val toggle = Switch(this).apply {
                     isChecked = animationEnabled
-                    scaleX = 0.78f
-                    scaleY = 0.78f
+                    scaleX = if (isLandscape()) 0.92f else 0.78f
+                    scaleY = if (isLandscape()) 0.92f else 0.78f
                     setOnCheckedChangeListener { _, enabled ->
                         animationEnabled = enabled
                         prefs.edit().putBoolean("animation", enabled).apply()
@@ -1087,8 +1150,8 @@ class MainActivity : Activity() {
             "autostart" -> {
                 val toggle = Switch(this).apply {
                     isChecked = autoStartEnabled
-                    scaleX = 0.78f
-                    scaleY = 0.78f
+                    scaleX = if (isLandscape()) 0.92f else 0.78f
+                    scaleY = if (isLandscape()) 0.92f else 0.78f
                     setOnCheckedChangeListener { _, enabled ->
                         autoStartEnabled = enabled
                         prefs.edit().putBoolean("auto_start", enabled).apply()
@@ -1101,7 +1164,7 @@ class MainActivity : Activity() {
             "theme" -> tile.setOnClickListener { showThemeDialog() }
             "last" -> tile.setOnClickListener { showTab(0) }
             "about" -> tile.setOnClickListener {
-                Toast.makeText(this, "Пульс Радио · версия 1.0", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "пульс радио · версия ${getInstalledVersion()}", Toast.LENGTH_LONG).show()
             }
         }
         return tile
@@ -1469,9 +1532,18 @@ class MainActivity : Activity() {
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    reportError("Ошибка воспроизведения", error)
-                    stopAnimations()
-                    updateStationCards()
+                    val nextIndex = activeStreamCandidateIndex + 1
+                    if (nextIndex < activeStreamCandidates.size) {
+                        activeStreamCandidateIndex = nextIndex
+                        val fallbackUrl = activeStreamCandidates[nextIndex]
+                        showStatus("Основной поток недоступен. Пробуем резервный…")
+                        Log.w("PulsRadio", "Переключение на резервный поток: $fallbackUrl", error)
+                        startStationPlayback(this@MainActivity.player ?: return, fallbackUrl, stations[selectedStation])
+                    } else {
+                        reportError("Не удалось подключиться к ${stations[selectedStation]}", error)
+                        stopAnimations()
+                        updateStationCards()
+                    }
                 }
             })
 
