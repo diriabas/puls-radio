@@ -12,6 +12,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import android.util.Log
+
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -20,19 +21,46 @@ import androidx.media3.exoplayer.ExoPlayer
 class MainActivity : Activity() {
 
     private val stations = listOf(
-        "Европа Плюс", "Радио Рекорд", "DFM",
-        "Радио ENERGY", "Авторадио", "Новое Радио",
-        "Love Radio", "Русское Радио", "Хит FM",
-        "Like FM", "Радио Maximum", "Наше Радио",
-        "Rock FM", "Relax FM", "Монте-Карло",
-        "Радио Джаз", "Kiss FM", "NRJ",
-        "Radio ONE", "Мегаполис FM", "Радио Маяк",
-        "Радио России", "Вести FM",
-        "Комсомольская правда", "Ретро FM", "Дорожное радио"
+        "Европа Плюс",
+        "Радио Вера",
+        "Мирадио",
+        "Радио Рекорд",
+        "DFM",
+        "Радио ENERGY",
+        "Авторадио",
+        "Новое Радио",
+        "Love Radio",
+        "Русское Радио",
+        "Хит FM",
+        "Like FM",
+        "Радио Maximum",
+        "Наше Радио",
+        "Rock FM",
+        "Relax FM",
+        "Монте-Карло",
+        "Радио Джаз",
+        "Kiss FM",
+        "NRJ",
+        "Radio ONE",
+        "Мегаполис FM",
+        "Радио Маяк",
+        "Радио России",
+        "Вести FM",
+        "Комсомольская правда",
+        "Ретро FM",
+        "Дорожное радио"
     )
 
-    private val europaPlusUrl =
-        "https://hls-01-regions.emgsound.ru/11_msk/96/playlist.m3u8"
+    private val stationUrls = mapOf(
+        "Европа Плюс" to
+            "https://hls-01-regions.emgsound.ru/11_msk/96/playlist.m3u8",
+
+        "Радио Вера" to
+            "http://radiovera.hostingradio.ru:8007/radiovera_128",
+
+        "Мирадио" to
+            "http://s02.radio-tochka.com:6090/radio"
+    )
 
     private var selectedStation = 0
     private var player: ExoPlayer? = null
@@ -243,7 +271,9 @@ class MainActivity : Activity() {
     }
 
     private fun togglePlayback() {
-        if (selectedStation != 0) {
+        val currentUrl = stationUrls[stations[selectedStation]]
+
+        if (currentUrl == null) {
             showStatus("Эта станция пока не подключена")
             return
         }
@@ -260,11 +290,11 @@ class MainActivity : Activity() {
                 currentPlayer.pause()
                 showStatus("Пауза")
             } else {
-                showStatus("Запуск радиопотока...")
+                showStatus("Запуск: ${stations[selectedStation]}...")
 
                 if (currentPlayer.playbackState == Player.STATE_IDLE) {
                     currentPlayer.setMediaItem(
-                        MediaItem.fromUri(europaPlusUrl)
+                        MediaItem.fromUri(currentUrl)
                     )
                     currentPlayer.prepare()
                 }
@@ -336,7 +366,8 @@ class MainActivity : Activity() {
     }
 
     private fun reportError(message: String, error: Throwable) {
-        val details = "$message: ${error.javaClass.simpleName}: ${error.message}"
+        val details =
+            "$message: ${error.javaClass.simpleName}: ${error.message}"
 
         Log.e("PulsRadio", details, error)
         showStatus(details)
@@ -351,7 +382,6 @@ class MainActivity : Activity() {
                 )
             }
         } catch (_: Exception) {
-            // Ошибка записи журнала не должна закрывать приложение.
         }
     }
 
