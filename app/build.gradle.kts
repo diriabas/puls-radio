@@ -11,8 +11,8 @@ android {
         applicationId = "com.pulsradio.app"
         minSdk = 23
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
     }
 
     compileOptions {
@@ -30,6 +30,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
-    // Без этого модуля потоки HLS (.m3u8) не воспроизводятся.
     implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
+    implementation("androidx.media3:media3-session:1.5.1")
 }
