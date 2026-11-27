@@ -27,6 +27,10 @@ class MainActivity : Activity() {
         "Европа Плюс",
         "Радио Вера",
         "Мирадио",
+        "Радио Азан",
+        "Исламское Радио",
+        "Muslim",
+        "Радио Корана",
         "Радио Рекорд",
         "DFM",
         "Радио ENERGY",
@@ -62,6 +66,14 @@ class MainActivity : Activity() {
             "https://radiovera.hostingradio.ru:8007/radiovera_128"
     )
 
+    private val websiteUrls = mapOf(
+        "Мирадио" to "https://miradio.ru",
+        "Радио Азан" to "https://azan.fm",
+        "Исламское Радио" to "https://101.ru/radio/user/756167",
+        "Muslim" to "https://101.ru/radio/user/876627",
+        "Радио Корана" to "https://quranradio.cc/ru/"
+    )
+
     private var selectedStation = 0
     private var player: ExoPlayer? = null
 
@@ -70,7 +82,7 @@ class MainActivity : Activity() {
     private lateinit var stationList: LinearLayout
     private lateinit var statusText: TextView
     private lateinit var scrollView: ScrollView
-    private lateinit var miradioButton: TextView
+    private lateinit var websiteButton: TextView
 
     private val backgroundColor = Color.rgb(30, 34, 42)
     private val panelColor = Color.rgb(43, 49, 60)
@@ -220,16 +232,16 @@ class MainActivity : Activity() {
 
         root.addView(statusText)
 
-        miradioButton = createControl("МИРАДИО — СЛУШАТЬ НА САЙТЕ").apply {
+        websiteButton = createControl("СЛУШАТЬ НА САЙТЕ").apply {
             textSize = 14f
             visibility = View.GONE
             setOnClickListener {
-                openMiradioWebsite()
+                openSelectedWebsite()
             }
         }
 
         root.addView(
-            miradioButton,
+            websiteButton,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 dp(48)
@@ -297,14 +309,14 @@ class MainActivity : Activity() {
 
         updatePlayerTitle()
         updateStationList()
-        updateMiradioButton()
+        updateWebsiteButton()
     }
 
     private fun togglePlayback() {
         val station = stations[selectedStation]
 
-        if (station == "Мирадио") {
-            showStatus("Для Мирадио нажмите кнопку «Слушать на сайте»")
+        if (websiteUrls.containsKey(station)) {
+            showStatus("Нажмите кнопку «Слушать на сайте»")
             return
         }
 
@@ -346,18 +358,21 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun openMiradioWebsite() {
+    private fun openSelectedWebsite() {
+        val station = stations[selectedStation]
+        val url = websiteUrls[station] ?: return
+
         try {
             val intent = Intent(
                 Intent.ACTION_VIEW,
-                Uri.parse("https://miradio.ru")
+                Uri.parse(url)
             )
 
             startActivity(intent)
-            showStatus("Открываем официальный сайт Мирадио")
+            showStatus("Открываем: $station")
 
         } catch (error: Throwable) {
-            showStatus("Не удалось открыть сайт Мирадио")
+            showStatus("Не удалось открыть сайт")
 
             Toast.makeText(
                 this,
@@ -365,7 +380,7 @@ class MainActivity : Activity() {
                 Toast.LENGTH_LONG
             ).show()
 
-            Log.e("PulsRadio", "Ошибка открытия Мирадио", error)
+            Log.e("PulsRadio", "Ошибка открытия сайта", error)
         }
     }
 
@@ -382,7 +397,7 @@ class MainActivity : Activity() {
         updatePlayerTitle()
         updateStationList()
         updatePlayButton()
-        updateMiradioButton()
+        updateWebsiteButton()
 
         showStatus("Выбрана станция: ${stations[index]}")
 
@@ -394,13 +409,25 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun updateMiradioButton() {
-        if (::miradioButton.isInitialized) {
-            miradioButton.visibility =
-                if (stations[selectedStation] == "Мирадио") {
+    private fun updateWebsiteButton() {
+        if (::websiteButton.isInitialized) {
+            val station = stations[selectedStation]
+
+            websiteButton.visibility =
+                if (websiteUrls.containsKey(station)) {
                     View.VISIBLE
                 } else {
                     View.GONE
+                }
+
+            websiteButton.text =
+                when (station) {
+                    "Мирадио" -> "МИРАДИО — СЛУШАТЬ НА САЙТЕ"
+                    "Радио Азан" -> "РАДИО АЗАН — СЛУШАТЬ"
+                    "Исламское Радио" -> "ИСЛАМСКОЕ РАДИО — СЛУШАТЬ"
+                    "Muslim" -> "MUSLIM — СЛУШАТЬ"
+                    "Радио Корана" -> "КОРАН — СЛУШАТЬ ЭФИР"
+                    else -> "СЛУШАТЬ НА САЙТЕ"
                 }
         }
     }
