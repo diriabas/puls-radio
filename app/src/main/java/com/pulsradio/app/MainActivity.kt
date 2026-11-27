@@ -2,10 +2,16 @@
 package com.pulsradio.app
 
 import android.app.Activity
+import android.app.Service
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
+import android.os.Binder
 import android.app.AlertDialog
 import android.os.Bundle
 import android.content.res.Configuration
@@ -24,6 +30,8 @@ import android.util.Log
 import java.net.HttpURLConnection
 import java.net.URL
 
+import androidx.core.app.NotificationCompat
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -947,10 +955,9 @@ class MainActivity : Activity() {
 
         val requestId = ++streamRequestId
         showStatus("Подключение: $station")
-        startService(Intent(this, RadioPlaybackService::class.java).apply {
-            action = RadioPlaybackService.ACTION_PLAY
-            putExtra(RadioPlaybackService.EXTRA_STATION, station)
-        })
+        // Запускаем уже привязанный сервис в foreground; сам поток задаётся
+        // через общий ExoPlayer, полученный из LocalBinder.
+        startService(Intent(this, RadioPlaybackService::class.java))
 
         val firstCandidate = activeStreamCandidates.firstOrNull() ?: url
         if (firstCandidate.endsWith(".m3u", ignoreCase = true) &&
@@ -1597,5 +1604,75 @@ class MainActivity : Activity() {
         player = null
         playbackService = null
         super.onDestroy()
+    }
+}
+
+/** Фоновый сервис воспроизведения. Размещён в этом же файле, чтобы сборка
+ * не зависела от того, в какую папку был помещён отдельный Kotlin-файл. */
+class RadioPlaybackService : Service() {
+
+    inner class LocalBinder : Binder() {
+        fun getService(): RadioPlaybackService = this@RadioPlaybackService
+    }
+
+    private val binder = LocalBinder()
+    lateinit var player: ExoPlayer
+        private set
+
+    override fun onCreate() {
+        super.onCreate()
+        player = ExoPlayer.Builder(this)
+            .setWakeMode(C.WAKE_MODE_LOCAL)
+            .build()
+        createNotificationChannel()
+    }
+
+    override fun onBind(intent: Intent?): IBinder = binder
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(NOTIFICATION_ID, buildNotification("Пульс Радио", false))
+        return START_STICKY
+    }
+
+    fun updatePlaybackNotification(station: String, playing: Boolean) {
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(NOTIFICATION_ID, buildNotification(station, playing))
+    }
+
+    private fun buildNotification(station: String, playing: Boolean): Notification {
+        val openApp = PendingIntent.getActivity(
+            this, 0, Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+        )
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(station)
+            .setContentText(if (playing) "Прямой эфир · Пульс Радио" else "Пульс Радио · пауза")
+            .setContentIntent(openApp)
+            .setOngoing(playing)
+            .setOnlyAlertOnce(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .build()
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID, "Воспроизведение радио", NotificationManager.IMPORTANCE_LOW
+            )
+            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+                .createNotificationChannel(channel)
+        }
+    }
+
+    override fun onDestroy() {
+        if (::player.isInitialized) player.release()
+        super.onDestroy()
+    }
+
+    companion object {
+        private const val CHANNEL_ID = "puls_radio_playback"
+        private const val NOTIFICATION_ID = 4102
     }
 }
