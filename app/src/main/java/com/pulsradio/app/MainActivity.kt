@@ -31,6 +31,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -311,11 +312,6 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4103)
-        }
 
         selectedStation = prefs.getInt("last_station", 0)
             .coerceIn(0, stations.lastIndex)
@@ -366,17 +362,17 @@ class MainActivity : Activity() {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(1), dp(10), dp(1))
+            setPadding(dp(12), dp(if (isLandscape()) 1 else 4), dp(12), dp(if (isLandscape()) 2 else 5))
         }
 
         val logo = TextView(this).apply {
             text = "◉"
-            textSize = 19f
+            textSize = iconTextSize(31f)
             setTextColor(accentColor)
             gravity = Gravity.CENTER
             setTypeface(null, Typeface.BOLD)
         }
-        header.addView(logo, LinearLayout.LayoutParams(dp(30), dp(32)))
+        header.addView(logo, LinearLayout.LayoutParams(iconDp(46), iconDp(48)))
 
         val titleColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -384,7 +380,7 @@ class MainActivity : Activity() {
         }
         val appName = TextView(this).apply {
             text = "пульс радио"
-            textSize = 10.5f
+            textSize = if (isLandscape()) 10f else 12f
             setTextColor(textColor)
             setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD), Typeface.BOLD)
             letterSpacing = 0.08f
@@ -394,22 +390,22 @@ class MainActivity : Activity() {
             background = roundedBackground(accentColor, 5)
         }
         titleColumn.addView(appName)
-        titleColumn.addView(accentLine, LinearLayout.LayoutParams(dp(38), dp(1)).apply {
-            topMargin = dp(1)
+        titleColumn.addView(accentLine, LinearLayout.LayoutParams(dp(42), dp(2)).apply {
+            topMargin = dp(3)
         })
-        header.addView(titleColumn, LinearLayout.LayoutParams(0, dp(32), 1f))
+        header.addView(titleColumn, LinearLayout.LayoutParams(0, dp(48), 1f))
 
         settingsButton = TextView(this).apply {
             text = "⚙"
-            textSize = 16f
+            textSize = iconTextSize(23f)
             setTextColor(accentColor)
             gravity = Gravity.CENTER
-            background = roundedBackground(panelColor, 10)
+            background = roundedBackground(panelColor, 16)
             isClickable = true
             isFocusable = true
             setOnClickListener { showTab(if (currentTab == 0) 1 else 0) }
         }
-        header.addView(settingsButton, LinearLayout.LayoutParams(dp(30), dp(30)))
+        header.addView(settingsButton, LinearLayout.LayoutParams(iconDp(46), iconDp(46)))
         root.addView(header)
 
         contentFrame = FrameLayout(this)
@@ -430,20 +426,27 @@ class MainActivity : Activity() {
 
         setContentView(root)
         root.setOnApplyWindowInsetsListener { view, insets ->
+            val leftInset: Int
             val topInset: Int
+            val rightInset: Int
             val bottomInset: Int
             if (Build.VERSION.SDK_INT >= 30) {
-                val bars = insets.getInsets(WindowInsets.Type.systemBars())
+                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                leftInset = bars.left
                 topInset = bars.top
+                rightInset = bars.right
                 bottomInset = bars.bottom
             } else {
                 @Suppress("DEPRECATION")
                 run {
+                    leftInset = insets.systemWindowInsetLeft
                     topInset = insets.systemWindowInsetTop
+                    rightInset = insets.systemWindowInsetRight
                     bottomInset = insets.systemWindowInsetBottom
                 }
             }
-            view.setPadding(0, topInset, 0, bottomInset)
+            // Учитываем боковую навигационную панель Huawei в альбомном режиме.
+            view.setPadding(leftInset, topInset, rightInset, bottomInset)
             insets
         }
         root.requestApplyInsets()
@@ -479,8 +482,15 @@ class MainActivity : Activity() {
             setPadding(dp(13), dp(5), dp(13), dp(12))
         }
 
-        val columns = if (isLandscape()) 7 else 3
-        val tileHeight = if (isLandscape()) dp(86) else dp(126)
+        // На телефоне в альбомной ориентации используем 6 колонок,
+        // на широких экранах — 7. Количество строк рассчитывается по каталогу.
+        val widthDp = resources.configuration.screenWidthDp
+        val columns = when {
+            !isLandscape() -> 3
+            widthDp >= 900 -> 7
+            else -> 6
+        }
+        val tileHeight = if (isLandscape()) dp(112) else dp(126)
         var index = 0
         while (index < stations.size) {
             val row = LinearLayout(this).apply {
@@ -782,7 +792,7 @@ class MainActivity : Activity() {
 
         tile.addView(
             icon,
-            LinearLayout.LayoutParams(if (isLandscape()) dp(27) else iconDp(44), if (isLandscape()) dp(25) else iconDp(40)).apply {
+            LinearLayout.LayoutParams(iconDp(42), iconDp(40)).apply {
                 gravity = Gravity.CENTER
                 bottomMargin = dp(5)
             }
@@ -790,7 +800,7 @@ class MainActivity : Activity() {
 
         val name = TextView(this).apply {
             text = station
-            textSize = if (isLandscape()) 7f else 10.5f
+            textSize = if (isLandscape()) 8.5f else 10.5f
             setTextColor(textColor)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
@@ -800,13 +810,13 @@ class MainActivity : Activity() {
             name,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (if (isLandscape()) dp(24) else dp(34))
+                (if (isLandscape()) dp(30) else dp(34))
             )
         )
 
         val description = TextView(this).apply {
             text = getStationDescription(station)
-            textSize = if (isLandscape()) 6f else 7.5f
+            textSize = if (isLandscape()) 7.5f else 7.5f
             setTextColor(secondaryColor)
             gravity = Gravity.CENTER
             maxLines = 1
@@ -815,7 +825,7 @@ class MainActivity : Activity() {
             description,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(15)
+                (if (isLandscape()) dp(17) else dp(15))
             )
         )
 
@@ -962,7 +972,7 @@ class MainActivity : Activity() {
         showStatus("Подключение: $station")
         // Запускаем уже привязанный сервис в foreground; сам поток задаётся
         // через общий ExoPlayer, полученный из LocalBinder.
-        startService(Intent(this, RadioPlaybackService::class.java))
+        ContextCompat.startForegroundService(this, Intent(this, RadioPlaybackService::class.java))
 
         val firstCandidate = activeStreamCandidates.firstOrNull() ?: url
         if (firstCandidate.endsWith(".m3u", ignoreCase = true) &&
@@ -1164,7 +1174,7 @@ class MainActivity : Activity() {
                 "last" -> "◉"
                 else -> "ⓘ"
             }
-            textSize = 16f
+            textSize = iconTextSize(23f)
             setTextColor(accentColor)
             gravity = Gravity.CENTER
         }
@@ -1612,139 +1622,3 @@ class MainActivity : Activity() {
     }
 }
 
-/** Фоновый сервис воспроизведения. Размещён в этом же файле, чтобы сборка
- * не зависела от того, в какую папку был помещён отдельный Kotlin-файл. */
-class RadioPlaybackService : Service() {
-
-    inner class LocalBinder : Binder() {
-        fun getService(): RadioPlaybackService = this@RadioPlaybackService
-    }
-
-    private val binder = LocalBinder()
-    lateinit var player: ExoPlayer
-        private set
-
-    override fun onCreate() {
-        super.onCreate()
-        player = ExoPlayer.Builder(this)
-            .setWakeMode(C.WAKE_MODE_LOCAL)
-            .build()
-        createNotificationChannel()
-    }
-
-    override fun onBind(intent: Intent?): IBinder = binder
-
-    private var notificationStation: String = "Пульс Радио"
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, buildNotification(notificationStation, player.isPlaying))
-        when (intent?.action) {
-            ACTION_TOGGLE -> {
-                if (player.isPlaying) player.pause() else player.play()
-                updatePlaybackNotification(notificationStation, player.isPlaying)
-            }
-            ACTION_NEXT -> changeStation(1)
-            ACTION_PREVIOUS -> changeStation(-1)
-        }
-        return START_STICKY
-    }
-
-    private fun changeStation(direction: Int) {
-        val prefs = getSharedPreferences("puls_radio_settings", Context.MODE_PRIVATE)
-        val oldIndex = prefs.getInt("last_station", 0).coerceIn(STATION_NAMES.indices)
-        val newIndex = (oldIndex + direction + STATION_NAMES.size) % STATION_NAMES.size
-        prefs.edit().putInt("last_station", newIndex).apply()
-        notificationStation = STATION_NAMES[newIndex]
-        player.setMediaItem(MediaItem.fromUri(STATION_URLS[newIndex]))
-        player.prepare()
-        player.play()
-        updatePlaybackNotification(notificationStation, true)
-    }
-
-    fun updatePlaybackNotification(station: String, playing: Boolean) {
-        notificationStation = station
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification(station, playing))
-    }
-
-    private fun serviceActionPendingIntent(action: String, requestCode: Int): PendingIntent {
-        val intent = Intent(this, RadioPlaybackService::class.java).setAction(action)
-        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
-            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
-        return PendingIntent.getService(this, requestCode, intent, flags)
-    }
-
-    private fun buildNotification(station: String, playing: Boolean): Notification {
-        val openApp = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or
-                (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
-        )
-        val toggleIcon = if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
-        val toggleLabel = if (playing) "Пауза" else "Продолжить"
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_puls_radio)
-            .setContentTitle(station)
-            .setContentText(if (playing) "Прямой эфир · Пульс Радио" else "Пульс Радио · пауза")
-            .setContentIntent(openApp)
-            .addAction(android.R.drawable.ic_media_previous, "Предыдущая", serviceActionPendingIntent(ACTION_PREVIOUS, 11))
-            .addAction(toggleIcon, toggleLabel, serviceActionPendingIntent(ACTION_TOGGLE, 12))
-            .addAction(android.R.drawable.ic_media_next, "Следующая", serviceActionPendingIntent(ACTION_NEXT, 13))
-            .setOngoing(playing)
-            .setOnlyAlertOnce(true)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-            .build()
-    }
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID, "Воспроизведение радио", NotificationManager.IMPORTANCE_LOW
-            )
-            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
-                .createNotificationChannel(channel)
-        }
-    }
-
-    override fun onDestroy() {
-        if (::player.isInitialized) player.release()
-        super.onDestroy()
-    }
-
-    companion object {
-        const val ACTION_TOGGLE = "com.pulsradio.app.action.TOGGLE"
-        const val ACTION_NEXT = "com.pulsradio.app.action.NEXT"
-        const val ACTION_PREVIOUS = "com.pulsradio.app.action.PREVIOUS"
-        private const val CHANNEL_ID = "puls_radio_playback"
-        private const val NOTIFICATION_ID = 4102
-
-        private val STATION_NAMES = listOf(
-            "Европа Плюс", "Радио Вера", "Коран — перевод на русский", "DFM", "Like FM",
-            "Русское Радио", "Радио Рекорд", "ENERGY", "Авторадио", "Новое Радио",
-            "Love Radio", "Хит FM", "Радио Maximum", "Наше Радио", "Relax FM",
-            "Радио Джаз", "Ретро FM", "Дорожное Радио", "Джем FM"
-        )
-        private val STATION_URLS = listOf(
-            "https://hls-02-europaplus.emgsound.ru/11/playlist.m3u8",
-            "http://radiovera.hostingradio.ru:8007/radiovera_128",
-            "https://backup.qurango.net/radio/translation_quran_Russia",
-            "https://dfm.hostingradio.ru/dfm96.aacp",
-            "https://hls-01-gpm.hostingradio.ru/likefm495/playlist.m3u8",
-            "https://rusradio.hostingradio.ru/rusradio96.aacp",
-            "https://hls-01-radiorecord.hostingradio.ru/record-msk/playlist.m3u8",
-            "https://hls-01-gpm.hostingradio.ru/energyfm343/128/playlist.m3u8",
-            "https://hls-01-gpm.hostingradio.ru/avtoradio343/128/playlist.m3u8",
-            "https://hls.newradio.ru/novoeradio-msk/playlist.m3u8",
-            "http://microit.n340.com:9000/VgMv0WV17ZVx1uuo_12_love_128_reg_60967",
-            "https://hitfm.hostingradio.ru/hitfm96.aacp",
-            "http://maximum.hostingradio.ru/maximum128.mp3",
-            "https://nashe1.hostingradio.ru/nashe-128.mp3",
-            "https://hls-01-gpm.hostingradio.ru/relaxfm7/playlist.m3u8",
-            "http://nashe1.hostingradio.ru/jazz-128.mp3",
-            "https://hls-01-retro.emgsound.ru/12/128/playlist.m3u8",
-            "https://dorognoe.hostingradio.ru:8000/dorognoe",
-            "https://online.jamfm.ru/hls/high.m3u8"
-        )
-    }
-}
