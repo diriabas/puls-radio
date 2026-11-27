@@ -311,6 +311,11 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4103)
+        }
 
         selectedStation = prefs.getInt("last_station", 0)
             .coerceIn(0, stations.lastIndex)
@@ -361,17 +366,17 @@ class MainActivity : Activity() {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(if (isLandscape()) 1 else 4), dp(12), dp(if (isLandscape()) 2 else 5))
+            setPadding(dp(10), dp(1), dp(10), dp(1))
         }
 
         val logo = TextView(this).apply {
             text = "◉"
-            textSize = iconTextSize(31f)
+            textSize = 19f
             setTextColor(accentColor)
             gravity = Gravity.CENTER
             setTypeface(null, Typeface.BOLD)
         }
-        header.addView(logo, LinearLayout.LayoutParams(iconDp(46), iconDp(48)))
+        header.addView(logo, LinearLayout.LayoutParams(dp(30), dp(32)))
 
         val titleColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -379,7 +384,7 @@ class MainActivity : Activity() {
         }
         val appName = TextView(this).apply {
             text = "пульс радио"
-            textSize = if (isLandscape()) 12f else 14f
+            textSize = 10.5f
             setTextColor(textColor)
             setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD), Typeface.BOLD)
             letterSpacing = 0.08f
@@ -389,22 +394,22 @@ class MainActivity : Activity() {
             background = roundedBackground(accentColor, 5)
         }
         titleColumn.addView(appName)
-        titleColumn.addView(accentLine, LinearLayout.LayoutParams(dp(52), dp(2)).apply {
-            topMargin = dp(3)
+        titleColumn.addView(accentLine, LinearLayout.LayoutParams(dp(38), dp(1)).apply {
+            topMargin = dp(1)
         })
-        header.addView(titleColumn, LinearLayout.LayoutParams(0, dp(48), 1f))
+        header.addView(titleColumn, LinearLayout.LayoutParams(0, dp(32), 1f))
 
         settingsButton = TextView(this).apply {
             text = "⚙"
-            textSize = iconTextSize(23f)
+            textSize = 16f
             setTextColor(accentColor)
             gravity = Gravity.CENTER
-            background = roundedBackground(panelColor, 16)
+            background = roundedBackground(panelColor, 10)
             isClickable = true
             isFocusable = true
             setOnClickListener { showTab(if (currentTab == 0) 1 else 0) }
         }
-        header.addView(settingsButton, LinearLayout.LayoutParams(iconDp(46), iconDp(46)))
+        header.addView(settingsButton, LinearLayout.LayoutParams(dp(30), dp(30)))
         root.addView(header)
 
         contentFrame = FrameLayout(this)
@@ -1159,7 +1164,7 @@ class MainActivity : Activity() {
                 "last" -> "◉"
                 else -> "ⓘ"
             }
-            textSize = iconTextSize(23f)
+            textSize = 16f
             setTextColor(accentColor)
             gravity = Gravity.CENTER
         }
@@ -1629,14 +1634,44 @@ class RadioPlaybackService : Service() {
 
     override fun onBind(intent: Intent?): IBinder = binder
 
+    private var notificationStation: String = "Пульс Радио"
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, buildNotification("Пульс Радио", false))
+        startForeground(NOTIFICATION_ID, buildNotification(notificationStation, player.isPlaying))
+        when (intent?.action) {
+            ACTION_TOGGLE -> {
+                if (player.isPlaying) player.pause() else player.play()
+                updatePlaybackNotification(notificationStation, player.isPlaying)
+            }
+            ACTION_NEXT -> changeStation(1)
+            ACTION_PREVIOUS -> changeStation(-1)
+        }
         return START_STICKY
     }
 
+    private fun changeStation(direction: Int) {
+        val prefs = getSharedPreferences("puls_radio_settings", Context.MODE_PRIVATE)
+        val oldIndex = prefs.getInt("last_station", 0).coerceIn(STATION_NAMES.indices)
+        val newIndex = (oldIndex + direction + STATION_NAMES.size) % STATION_NAMES.size
+        prefs.edit().putInt("last_station", newIndex).apply()
+        notificationStation = STATION_NAMES[newIndex]
+        player.setMediaItem(MediaItem.fromUri(STATION_URLS[newIndex]))
+        player.prepare()
+        player.play()
+        updatePlaybackNotification(notificationStation, true)
+    }
+
     fun updatePlaybackNotification(station: String, playing: Boolean) {
+        notificationStation = station
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, buildNotification(station, playing))
+    }
+
+    private fun serviceActionPendingIntent(action: String, requestCode: Int): PendingIntent {
+        val intent = Intent(this, RadioPlaybackService::class.java).setAction(action)
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+        return PendingIntent.getService(this, requestCode, intent, flags)
     }
 
     private fun buildNotification(station: String, playing: Boolean): Notification {
@@ -1645,14 +1680,20 @@ class RadioPlaybackService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or
                 (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
+        val toggleIcon = if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+        val toggleLabel = if (playing) "Пауза" else "Продолжить"
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setSmallIcon(R.drawable.ic_puls_radio)
             .setContentTitle(station)
             .setContentText(if (playing) "Прямой эфир · Пульс Радио" else "Пульс Радио · пауза")
             .setContentIntent(openApp)
+            .addAction(android.R.drawable.ic_media_previous, "Предыдущая", serviceActionPendingIntent(ACTION_PREVIOUS, 11))
+            .addAction(toggleIcon, toggleLabel, serviceActionPendingIntent(ACTION_TOGGLE, 12))
+            .addAction(android.R.drawable.ic_media_next, "Следующая", serviceActionPendingIntent(ACTION_NEXT, 13))
             .setOngoing(playing)
             .setOnlyAlertOnce(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .build()
     }
 
@@ -1672,7 +1713,38 @@ class RadioPlaybackService : Service() {
     }
 
     companion object {
+        const val ACTION_TOGGLE = "com.pulsradio.app.action.TOGGLE"
+        const val ACTION_NEXT = "com.pulsradio.app.action.NEXT"
+        const val ACTION_PREVIOUS = "com.pulsradio.app.action.PREVIOUS"
         private const val CHANNEL_ID = "puls_radio_playback"
         private const val NOTIFICATION_ID = 4102
+
+        private val STATION_NAMES = listOf(
+            "Европа Плюс", "Радио Вера", "Коран — перевод на русский", "DFM", "Like FM",
+            "Русское Радио", "Радио Рекорд", "ENERGY", "Авторадио", "Новое Радио",
+            "Love Radio", "Хит FM", "Радио Maximum", "Наше Радио", "Relax FM",
+            "Радио Джаз", "Ретро FM", "Дорожное Радио", "Джем FM"
+        )
+        private val STATION_URLS = listOf(
+            "https://hls-02-europaplus.emgsound.ru/11/playlist.m3u8",
+            "http://radiovera.hostingradio.ru:8007/radiovera_128",
+            "https://backup.qurango.net/radio/translation_quran_Russia",
+            "https://dfm.hostingradio.ru/dfm96.aacp",
+            "https://hls-01-gpm.hostingradio.ru/likefm495/playlist.m3u8",
+            "https://rusradio.hostingradio.ru/rusradio96.aacp",
+            "https://hls-01-radiorecord.hostingradio.ru/record-msk/playlist.m3u8",
+            "https://hls-01-gpm.hostingradio.ru/energyfm343/128/playlist.m3u8",
+            "https://hls-01-gpm.hostingradio.ru/avtoradio343/128/playlist.m3u8",
+            "https://hls.newradio.ru/novoeradio-msk/playlist.m3u8",
+            "http://microit.n340.com:9000/VgMv0WV17ZVx1uuo_12_love_128_reg_60967",
+            "https://hitfm.hostingradio.ru/hitfm96.aacp",
+            "http://maximum.hostingradio.ru/maximum128.mp3",
+            "https://nashe1.hostingradio.ru/nashe-128.mp3",
+            "https://hls-01-gpm.hostingradio.ru/relaxfm7/playlist.m3u8",
+            "http://nashe1.hostingradio.ru/jazz-128.mp3",
+            "https://hls-01-retro.emgsound.ru/12/128/playlist.m3u8",
+            "https://dorognoe.hostingradio.ru:8000/dorognoe",
+            "https://online.jamfm.ru/hls/high.m3u8"
+        )
     }
 }
