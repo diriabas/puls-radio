@@ -3,6 +3,7 @@ package com.pulsradio.app
 
 import android.app.Activity
 import android.os.Bundle
+import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -10,11 +11,8 @@ import android.animation.ValueAnimator
 import android.animation.ArgbEvaluator
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.widget.*
 import android.util.Log
-import android.content.Context
-import android.graphics.drawable.Drawable
 
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -89,7 +87,6 @@ class MainActivity : Activity() {
     private lateinit var playButton: TextView
     private lateinit var statusText: TextView
     private lateinit var playerCard: LinearLayout
-    private lateinit var stationCount: TextView
     private lateinit var radioTab: TextView
     private lateinit var settingsTab: TextView
 
@@ -262,15 +259,12 @@ class MainActivity : Activity() {
 
         val scroll = ScrollView(this).apply {
             clipToPadding = false
-            isFillViewport = false
         }
 
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(5), dp(16), dp(18))
         }
-
-        // Верхняя карточка проигрывателя
 
         playerCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -327,20 +321,15 @@ class MainActivity : Activity() {
         playerCard.addView(stationTitle)
         playerCard.addView(stationSubtitle)
 
-        // Визуализатор
-
         val visualizer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(0, dp(18), 0, dp(18))
         }
 
-        repeat(23) { index ->
+        repeat(23) {
             val bar = View(this).apply {
-                background = roundedBackground(
-                    accentColor,
-                    5
-                )
+                background = roundedBackground(accentColor, 5)
             }
 
             visualizerBars.add(bar)
@@ -355,8 +344,6 @@ class MainActivity : Activity() {
         }
 
         playerCard.addView(visualizer)
-
-        // Кнопка Play / Pause
 
         playButton = TextView(this).apply {
             text = "▶"
@@ -381,6 +368,7 @@ class MainActivity : Activity() {
             setTextColor(secondaryColor)
             gravity = Gravity.CENTER
             setPadding(0, dp(12), 0, dp(2))
+            text = "Выбери радиостанцию"
         }
 
         playerCard.addView(statusText)
@@ -395,8 +383,6 @@ class MainActivity : Activity() {
             }
         )
 
-        // Заголовок списка
-
         val titleRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -409,7 +395,12 @@ class MainActivity : Activity() {
             setTypeface(null, Typeface.BOLD)
         }
 
-        stationCount = TextView(this).apply {
+        titleRow.addView(
+            listTitle,
+            LinearLayout.LayoutParams(0, dp(40), 1f)
+        )
+
+        val count = TextView(this).apply {
             text = "${stations.size} станций"
             textSize = 12f
             setTextColor(secondaryColor)
@@ -418,19 +409,11 @@ class MainActivity : Activity() {
             setPadding(dp(12), dp(7), dp(12), dp(7))
         }
 
-        titleRow.addView(
-            listTitle,
-            LinearLayout.LayoutParams(0, dp(40), 1f)
-        )
-
-        titleRow.addView(stationCount)
+        titleRow.addView(count)
         container.addView(titleRow)
-
-        // Карточки станций
 
         stations.forEachIndexed { index, station ->
             val card = createStationCard(index, station)
-
             stationCards.add(card)
 
             container.addView(
@@ -445,7 +428,6 @@ class MainActivity : Activity() {
         }
 
         scroll.addView(container)
-
         return scroll
     }
 
@@ -648,8 +630,6 @@ class MainActivity : Activity() {
     }
 
     private fun updateStationCards() {
-        if (!::stationCards.isInitialized) return
-
         stationCards.forEachIndexed { index, card ->
             card.background = stationBackground(
                 index == selectedStation
@@ -670,8 +650,6 @@ class MainActivity : Activity() {
             }
         }
     }
-
-    // Экран настроек
 
     private fun createSettingsScreen(): View {
         val scroll = ScrollView(this)
@@ -699,8 +677,7 @@ class MainActivity : Activity() {
         container.addView(title)
         container.addView(subtitle)
 
-        val appearanceTitle = sectionTitle("ВНЕШНИЙ ВИД")
-        container.addView(appearanceTitle)
+        container.addView(sectionTitle("ВНЕШНИЙ ВИД"))
 
         container.addView(
             createSwitchSetting(
@@ -919,10 +896,8 @@ class MainActivity : Activity() {
         return row
     }
 
-    // Анимация визуализатора и верхней карточки
-
     private fun startAnimations() {
-        if (!animationEnabled) return
+        if (!animationEnabled || currentTab != 0) return
 
         stopAnimations()
 
@@ -935,15 +910,10 @@ class MainActivity : Activity() {
 
                 visualizerBars.forEachIndexed { index, bar ->
                     val wave = kotlin.math.abs(
-                        kotlin.math.sin(
-                            phase + index * 0.55
-                        )
+                        kotlin.math.sin(phase + index * 0.55)
                     )
 
-                    val height = dp(
-                        (8 + wave * 30).toInt()
-                    )
-
+                    val height = dp((8 + wave * 30).toInt())
                     val params = bar.layoutParams
                     params.height = height
                     bar.layoutParams = params
@@ -964,9 +934,8 @@ class MainActivity : Activity() {
             repeatMode = ValueAnimator.REVERSE
 
             addUpdateListener {
-                if (::playerCard.isInitialized) {
+                if (::playerCard.isInitialized && currentTab == 0) {
                     val color = it.animatedValue as Int
-
                     playerCard.background = playerBackground(
                         color,
                         Color.rgb(7, 20, 38)
@@ -992,7 +961,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun stationBackground(active: Boolean): Drawable {
+    private fun stationBackground(active: Boolean): GradientDrawable {
         return GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
             if (active) {
@@ -1010,7 +979,6 @@ class MainActivity : Activity() {
             }
         ).apply {
             cornerRadius = dp(17).toFloat()
-
             setStroke(
                 dp(if (active) 2 else 1),
                 if (active) accentColor
@@ -1032,7 +1000,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun roundAccentBackground(): Drawable {
+    private fun roundAccentBackground(): GradientDrawable {
         return GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
             intArrayOf(
@@ -1057,7 +1025,7 @@ class MainActivity : Activity() {
     }
 
     private fun showStatus(message: String) {
-        if (::statusText.isInitialized) {
+        if (::statusText.isInitialized && currentTab == 0) {
             statusText.text = message
         }
     }
