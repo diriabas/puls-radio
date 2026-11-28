@@ -10,6 +10,7 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import androidx.media3.common.C
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.Player
 import androidx.core.app.NotificationCompat
 import androidx.media3.exoplayer.ExoPlayer
@@ -32,8 +33,16 @@ class RadioPlaybackService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+            .build()
         player = ExoPlayer.Builder(this)
             .setWakeMode(C.WAKE_MODE_NETWORK)
+            // Pause radio when another app (music, video, navigation) takes audio focus.
+            // Do not automatically resume after the other app releases focus.
+            .setAudioAttributes(audioAttributes, true)
+            .setHandleAudioBecomingNoisy(true)
             .build()
         mediaSession = MediaSession.Builder(this, player).build()
 
