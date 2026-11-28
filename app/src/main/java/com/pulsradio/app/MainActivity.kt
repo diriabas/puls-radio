@@ -51,7 +51,12 @@ class MainActivity : Activity() {
         "Радио Джаз",
         "Ретро FM",
         "Дорожное Радио",
-        "Джем FM"
+        "Джем FM",
+        "Радио Маяк",
+        "Радио России",
+        "Вести FM",
+        "Радио Спутник",
+        "Говорит Москва"
     )
 
     // Прямые потоки. Некоторые вещатели могут менять адреса эфира;
@@ -112,7 +117,22 @@ class MainActivity : Activity() {
             "https://dorognoe.hostingradio.ru:8000/dorognoe",
 
         "Джем FM" to
-            "https://online.jamfm.ru/hls/high.m3u8"
+            "https://online.jamfm.ru/hls/high.m3u8",
+
+        "Радио Маяк" to
+            "https://icecast-vgtrk.cdnvideo.ru/mayakfm_mp3_192kbps",
+
+        "Радио России" to
+            "http://icecast.vgtrk.cdnvideo.ru/rrzonam_mp3_128kbps",
+
+        "Вести FM" to
+            "http://icecast.vgtrk.cdnvideo.ru/vestifm_mp3_128kbps",
+
+        "Радио Спутник" to
+            "https://icecast-rian.cdnvideo.ru/voicerus",
+
+        "Говорит Москва" to
+            "http://media.govoritmoskva.ru:8880/ru64.mp3"
     )
 
     // Резервные адреса используются автоматически, если основной поток не запускается.
@@ -139,6 +159,19 @@ class MainActivity : Activity() {
         "Новое Радио" to listOf(
             "https://hls.newradio.ru/novoeradio-msk/playlist.m3u8",
             "http://stream.newradio.ru/moscow.novoe.aacp"
+        ),
+        "Радио Маяк" to listOf(
+            "https://icecast-vgtrk.cdnvideo.ru/mayakfm_mp3_192kbps",
+            "https://icecast-vgtrk.cdnvideo.ru/mayakfm_aac_64kbps",
+            "http://icecast.vgtrk.cdnvideo.ru/mayakfm_mp3_128kbps"
+        ),
+        "Радио России" to listOf(
+            "http://icecast.vgtrk.cdnvideo.ru/rrzonam_mp3_128kbps",
+            "http://icecast.vgtrk.cdnvideo.ru/rrzonam_mp3_64"
+        ),
+        "Вести FM" to listOf(
+            "http://icecast.vgtrk.cdnvideo.ru/vestifm_mp3_128kbps",
+            "http://icecast.vgtrk.cdnvideo.ru/vestifm_mp3_192kbps"
         )
     )
 
@@ -367,17 +400,17 @@ class MainActivity : Activity() {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(if (isLandscape()) 1 else 3), dp(8), dp(if (isLandscape()) 1 else 3))
+            setPadding(dp(if (isLandscape()) 3 else 8), dp(if (isLandscape()) 0 else 3), dp(if (isLandscape()) 3 else 8), dp(if (isLandscape()) 0 else 3))
         }
 
         val logo = TextView(this).apply {
             text = "◉"
-            textSize = iconTextSize(31f)
+            textSize = iconTextSize(if (isLandscape()) 19f else 31f)
             setTextColor(accentColor)
             gravity = Gravity.CENTER
             setTypeface(null, Typeface.BOLD)
         }
-        header.addView(logo, LinearLayout.LayoutParams(if (isLandscape()) dp(32) else dp(38), if (isLandscape()) dp(34) else dp(40)))
+        header.addView(logo, LinearLayout.LayoutParams(if (isLandscape()) dp(22) else dp(38), if (isLandscape()) dp(24) else dp(40)))
 
         val titleColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -385,7 +418,7 @@ class MainActivity : Activity() {
         }
         val appName = TextView(this).apply {
             text = "пульс радио"
-            textSize = if (isLandscape()) 10f else 12f
+            textSize = if (isLandscape()) 8f else 12f
             setTextColor(textColor)
             setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD), Typeface.BOLD)
             letterSpacing = 0.08f
@@ -395,14 +428,21 @@ class MainActivity : Activity() {
             background = roundedBackground(accentColor, 5)
         }
         titleColumn.addView(appName)
-        titleColumn.addView(accentLine, LinearLayout.LayoutParams(dp(52), dp(2)).apply {
-            topMargin = dp(3)
+        titleColumn.addView(accentLine, LinearLayout.LayoutParams(dp(if (isLandscape()) 30 else 52), dp(if (isLandscape()) 1 else 2)).apply {
+            topMargin = dp(if (isLandscape()) 1 else 3)
         })
-        header.addView(titleColumn, LinearLayout.LayoutParams(0, dp(48), 1f))
+        header.addView(titleColumn, LinearLayout.LayoutParams(
+            if (isLandscape()) LinearLayout.LayoutParams.WRAP_CONTENT else 0,
+            dp(if (isLandscape()) 26 else 48),
+            if (isLandscape()) 0f else 1f
+        ))
+        if (isLandscape()) {
+            header.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        }
 
         settingsButton = TextView(this).apply {
             text = "⚙"
-            textSize = iconTextSize(17f)
+            textSize = iconTextSize(if (isLandscape()) 12f else 17f)
             setTextColor(accentColor)
             gravity = Gravity.CENTER
             background = roundedBackground(panelColor, 12)
@@ -410,7 +450,10 @@ class MainActivity : Activity() {
             isFocusable = true
             setOnClickListener { showTab(if (currentTab == 0) 1 else 0) }
         }
-        header.addView(settingsButton, LinearLayout.LayoutParams(iconDp(34), iconDp(34)))
+        header.addView(settingsButton, LinearLayout.LayoutParams(
+            iconDp(if (isLandscape()) 23 else 34),
+            iconDp(if (isLandscape()) 23 else 34)
+        ))
         root.addView(header)
 
         contentFrame = FrameLayout(this)
@@ -874,6 +917,11 @@ class MainActivity : Activity() {
             "Ретро FM" -> "RETRO"
             "Дорожное Радио" -> "ДР"
             "Джем FM" -> "JAM"
+            "Радио Маяк" -> "МАЯК"
+            "Радио России" -> "РОССИЯ"
+            "Вести FM" -> "ВЕСТИ"
+            "Радио Спутник" -> "СПУТНИК"
+            "Говорит Москва" -> "ГОВОРИТ"
             else -> "FM"
         }
     }
@@ -899,6 +947,11 @@ class MainActivity : Activity() {
             "Ретро FM" -> Color.rgb(185, 115, 35)
             "Дорожное Радио" -> Color.rgb(45, 105, 75)
             "Джем FM" -> Color.rgb(220, 65, 105)
+            "Радио Маяк" -> Color.rgb(225, 75, 35)
+            "Радио России" -> Color.rgb(35, 105, 165)
+            "Вести FM" -> Color.rgb(35, 75, 145)
+            "Радио Спутник" -> Color.rgb(75, 65, 145)
+            "Говорит Москва" -> Color.rgb(40, 115, 115)
             else -> accentColor
         }
     }
@@ -928,6 +981,11 @@ class MainActivity : Activity() {
             "Ретро FM" -> "Любимые хиты прошлых лет"
             "Дорожное Радио" -> "Музыка в дороге"
             "Джем FM" -> "Музыка Екатеринбурга"
+            "Радио Маяк" -> "Разговоры, новости и культура"
+            "Радио России" -> "Новости, передачи и культура"
+            "Вести FM" -> "Новости и аналитика"
+            "Радио Спутник" -> "Новости и разговорные программы"
+            "Говорит Москва" -> "Новости и городские обсуждения"
             else -> "Прямой эфир"
         }
     }
